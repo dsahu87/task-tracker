@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Universal Floating Note Keeper & Task Tracker</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Consolidated Sticky Top Header with All Core Controls -->
+  <div class="top-header">
+    <div class="header-panel-left">
+      <button class="menu-toggle-btn strict-toggle-header-btn icon-only-compact-btn" id="header-strict-btn" onclick="toggleHardDeadlinesFilterHeader()" title="Filter Hard Deadlines">
+        <span class="header-btn-icon">🚨</span>
+      </button>
+      <button class="menu-toggle-btn undo-header-btn icon-only-compact-btn" id="header-undo-btn" onclick="triggerGlobalUndo()" title="Nothing to undo" disabled>
+        <span class="header-btn-icon">↩️</span>
+      </button>
+      
+      <!-- Workspace View Switchers -->
+      <button class="menu-toggle-btn view-toggle-compact-btn icon-only-compact-btn active-mode" id="header-timeline-btn" onclick="switchWorkspaceViewMode('TIMELINE')" title="Switch to Timeline View">
+        <span class="header-btn-icon">📅</span>
+      </button>
+      <button class="menu-toggle-btn view-toggle-compact-btn icon-only-compact-btn" id="header-labelline-btn" onclick="switchWorkspaceViewMode('LABELLINE')" title="Switch to Label Line View">
+        <span class="header-btn-icon">🏷️</span>
+      </button>
+      <button class="menu-toggle-btn view-toggle-compact-btn icon-only-compact-btn" id="header-tracker-btn" onclick="switchWorkspaceViewMode('TRACKER')" title="Switch to Tracker Tasks View">
+        <span class="header-btn-icon">📊</span>
+      </button>
+
+      <button class="menu-toggle-btn view-toggle-compact-btn icon-only-compact-btn" id="header-view-btn" onclick="toggleWorkspaceLayoutView()" title="Switch to Grid View">
+        <span class="header-btn-icon">📱</span>
+      </button>
+      <button class="menu-toggle-btn view-toggle-compact-btn icon-only-compact-btn" id="header-expand-collapse-btn" onclick="toggleAllSectionsUnified()" title="Expand / Collapse All Sections">
+        <span class="header-btn-icon">📐</span>
+      </button>
+    </div>
+
+    <div class="header-panel-right">
+      <button class="menu-toggle-btn label-sidebar-header-btn" id="header-label-btn" onclick="toggleLabelSidebarDrawer(event)" title="Toggle Labels Drawer">
+        <span class="header-btn-icon">🏷️</span><span>All Notes</span><span style="font-weight:700; color:#1a73e8; font-size:10px;">(0)</span>
+      </button>
+      <button class="habit-add-btn" id="header-add-tracker-btn" onclick="openTrackerCreatorModal(event)" title="Create Tracker Task" style="display:none; align-items:center; gap:2px;">
+        <span>＋</span><span>Tracker</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="loading-status" id="loading">Syncing workspace...</div>
+  <div class="sidebar-overlay" id="overlay" onclick="closeAllSidebars()"></div>
+
+  <!-- Floating Undo Toast Notification -->
+  <div class="undo-toast-bar" id="undo-toast">
+    <span id="undo-toast-text">Item deleted</span>
+    <button class="undo-toast-action-btn" onclick="triggerGlobalUndo()">Undo</button>
+    <button class="undo-toast-close" onclick="hideUndoToast()">✕</button>
+  </div>
+
+  <!-- Sliding Off-Canvas Labels Drawer -->
+  <div class="sidebars-wrapper" id="sidebars-wrapper-el">
+    <div class="sidebar-drawer-header">
+      <span class="sidebar-drawer-title">🏷️ Workspace Labels</span>
+      <button class="sidebar-drawer-close-btn" onclick="closeAllSidebars()" title="Close Drawers">✕</button>
+    </div>
+    <div class="label-sidebar" id="tracker-sidebar"></div>
+    <div class="label-sidebar" id="label-sidebar"></div>
+  </div>
+
+  <div class="main-layout">
+    <div class="workspace" id="workspace-target"></div>
+  </div>
+
+  <!-- Move-To-Note Target Selection Modal -->
+  <div class="move-target-modal-backdrop" id="move-target-modal" onclick="if(event.target === this) closeMoveTargetModal();">
+    <div class="move-target-modal-card" onclick="event.stopPropagation();">
+      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #e0e0e0; padding-bottom:8px;">
+        <span style="font-size:13px; font-weight:800; color:#1a73e8; text-transform:uppercase;">Select Target Note</span>
+        <button class="btn" style="background:#5f6368; padding:2px 6px; font-size:11px;" onclick="closeMoveTargetModal()">✕</button>
+      </div>
+      <div id="move-modal-source-title" style="font-size:12px; font-weight:600; color:#3c4043; background:#f1f3f4; padding:6px 8px; border-radius:4px;"></div>
+      <div style="font-size:11px; color:#5f6368;">Click a target note below to append this title as a checklist item:</div>
+      <div class="move-target-list" id="move-modal-list"></div>
+    </div>
+  </div>
+
+  <!-- Dedicated Tracker Task Creator Modal Window -->
+  <div class="tracker-creator-modal-backdrop" id="tracker-creator-modal" onclick="if(event.target === this) closeTrackerCreatorModal();">
+    <div class="tracker-creator-card" onclick="event.stopPropagation();">
+      <div class="tracker-creator-header">
+        <span>Create New Tracker Task</span>
+        <button class="btn" style="background:#5f6368; padding:3px 8px; font-size:11px;" onclick="closeTrackerCreatorModal()">✕</button>
+      </div>
+
+      <div class="tracker-creator-field-group">
+        <label class="tracker-creator-label">Tracker Task Title</label>
+        <input type="text" id="tracker-creator-name" class="tracker-creator-input" placeholder="e.g., Daily Workout, Code 1 hour" onkeydown="if(event.key==='Enter') submitTrackerCreatorModal()">
+      </div>
+
+      <div class="tracker-creator-field-group">
+        <label class="tracker-creator-label">Task Type</label>
+        <div style="display:flex; gap:6px;">
+          <button type="button" class="habit-type-select-btn tracker-type-pill active" data-type="boolean" onclick="setTrackerModalType('boolean')" style="flex:1; height:32px; font-weight:600;">☑️ Checkmark</button>
+          <button type="button" class="habit-type-select-btn tracker-type-pill" data-type="count" onclick="setTrackerModalType('count')" style="flex:1; height:32px; font-weight:600;">🔢 Numeric Count</button>
+          <button type="button" class="habit-type-select-btn tracker-type-pill" data-type="log" onclick="setTrackerModalType('log')" style="flex:1; height:32px; font-weight:600;">📝 Detailed Log</button>
+        </div>
+      </div>
+
+      <div class="tracker-creator-field-group">
+        <label class="tracker-creator-label">2-Min Fallback Rule (Optional)</label>
+        <input type="text" id="tracker-creator-minrule" class="tracker-creator-input" placeholder="e.g. ⚡ 5 Pushups">
+      </div>
+
+      <div class="tracker-creator-row-flex" style="margin-top:2px;">
+        <label class="tracker-creator-checkbox-row">
+          <input type="checkbox" id="tracker-creator-pin-check">
+          <span>📌 Pin / Execute Now Priority</span>
+        </label>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:8px; border-top:1px solid #e0e0e0; padding-top:10px; margin-top:4px;">
+        <button class="btn" style="background:#5f6368;" onclick="closeTrackerCreatorModal()">Cancel</button>
+        <button class="btn" onclick="submitTrackerCreatorModal()">Save Task</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom Safe Habit Input Modal -->
+  <div class="habit-input-modal-backdrop" id="habit-input-modal" onclick="if(event.target === this) closeHabitModalInput();">
+    <div class="habit-input-modal-card">
+      <div class="habit-input-modal-title" id="habit-modal-title">Enter value:</div>
+      <input type="text" id="habit-modal-input" class="habit-input-modal-field" onkeydown="if(event.key==='Enter') submitHabitModalInput()">
+      <div class="habit-input-modal-btn-row">
+        <button class="btn" style="background:#5f6368; padding:4px 10px; font-size:12px;" onclick="closeHabitModalInput()">Cancel</button>
+        <button class="btn" style="padding:4px 10px; font-size:12px;" onclick="submitHabitModalInput()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Matrix Modal Overlay -->
+  <div class="matrix-modal-backdrop" id="matrix-backdrop-panel" onclick="if(event.target === this) closeMatrixModal();">
+    <div class="matrix-modal-card">
+      <div class="matrix-modal-header">
+        <h3 id="matrix-title-label" style="font-size: 15px; color: #1a73e8; padding-right: 12px; word-break: break-all;">Annual Performance</h3>
+        <button class="btn" style="background:#5f6368; padding:6px 12px; font-size:12px; flex-shrink: 0;" onclick="closeMatrixModal()">✕ Close View</button>
+      </div>
+      
+      <div class="matrix-legend">
+        <span>Consistency Scale:</span>
+        <div class="legend-box score-none"></div><span>0 days</span>
+        <div class="legend-box score-low"></div><span>1-2 days</span>
+        <div class="legend-box score-mid"></div><span>3-4 days</span>
+        <div class="legend-box score-high"></div><span>5-7 days completed</span>
+      </div>
+      
+      <div class="matrix-scroll-wrapper">
+        <div class="matrix-grid-container" id="matrix-grid-target"></div>
+      </div>
+
+      <div class="week-inspector-card" id="week-logs-inspector">
+        <div style="font-size: 12px; font-weight: 700; color: #1a73e8;" id="inspector-week-title">Detailed Entries for Week</div>
+        <div id="week-logs-list-target" style="display:flex; flex-direction:column; gap:4px; margin-bottom:6px;"></div>
+        <div style="display:flex; flex-direction:column; gap:4px; border-top:1px solid #dadce0; padding-top:6px;">
+          <span style="font-size: 11px; font-weight: 700; color: #5f6368;">Weekly Retrospective / Reflection Note:</span>
+          <textarea id="week-retro-input" class="retro-textarea" placeholder="Reflect on this week (e.g., successes, blockers)..."></textarea>
+          <div style="display:flex; justify-content:flex-end;">
+            <button class="btn" style="padding:3px 10px; font-size:11px;" onclick="saveWeeklyRetrospective()">Save Note</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="font-size:11px; color:#757575; font-style:italic; text-align:right;">Click any week box above to review individual contact names, logs & notes.</div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
