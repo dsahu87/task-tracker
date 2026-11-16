@@ -29,8 +29,6 @@ body { background-color: #f1f3f4; color: #202124; padding: 10px; height: 100%; m
 
 .menu-toggle-btn.view-toggle-compact-btn { color: #1a73e8; border-color: #d2e3fc; background: #f8faff; flex: 0 0 auto; min-width: auto; padding: 6px 10px; border-radius: 50%; width: 34px; height: 34px; }
 .menu-toggle-btn.view-toggle-compact-btn.active-mode { background: #1a73e8; color: #ffffff; border-color: #1a73e8; }
-.menu-toggle-btn.strict-toggle-header-btn { color: #d93025; border-color: #fce8e6; background: #fdf2f2; font-size: 14px; flex: 0 0 auto; min-width: auto; padding: 6px 10px; border-radius: 50%; width: 34px; height: 34px; }
-.menu-toggle-btn.strict-toggle-header-btn.active { background: #d93025; color: #ffffff; border-color: #d93025; }
 
 .menu-toggle-btn.undo-header-btn { color: #ea8600; border-color: #feefc3; background: #fef7e0; font-size: 14px; flex: 0 0 auto; min-width: auto; padding: 6px 10px; border-radius: 50%; width: 34px; height: 34px; }
 .menu-toggle-btn.undo-header-btn:disabled { opacity: 0.4; cursor: not-allowed; }

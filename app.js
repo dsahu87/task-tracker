@@ -20,8 +20,7 @@ const habitsDocRef = doc(db, "notes", "_settings_habitsConfig");
 let notes = [];
 let habits = [];
 let currentLabelFilter = 'ALL'; 
-let currentTrackerLabelFilter = 'ALL';
-let filterHardDeadlinesOnly = false; 
+let currentTrackerLabelFilter = 'ALL'; 
 
 // View Mode: 'TIMELINE', 'LABELLINE', or 'TRACKER'
 let currentWorkspaceViewMode = 'LABELLINE';
@@ -433,22 +432,18 @@ window.addNewTrackerCardLabel = async function(habitId, newLabel) {
   await setDoc(habitsDocRef, { habitsList: habits }, { merge: true });
 };
 
-window.toggleHardDeadlinesFilterHeader = function() {
-  filterHardDeadlinesOnly = !filterHardDeadlinesOnly;
-  const btn = document.getElementById('header-strict-btn');
-  if (btn) {
-    if (filterHardDeadlinesOnly) {
-      btn.classList.add('active');
-      btn.title = "Hard Deadlines Active (Click to show all tasks)";
-    } else {
-      btn.classList.remove('active');
-      btn.title = "Filter by Hard Deadlines";
-    }
+/* TIMELINE / LABELLINE / TRACKER VIEW SWITCHER */
+window.toggleNotesViewMode = function() {
+  if (currentWorkspaceViewMode === 'LABELLINE') {
+    currentWorkspaceViewMode = 'TIMELINE';
+  } else {
+    currentWorkspaceViewMode = 'LABELLINE';
   }
+  updateHeaderViewModeButtons();
   renderNotes();
+  updateTopHeaderLabels();
 };
 
-/* TIMELINE / LABELLINE / TRACKER VIEW SWITCHER */
 window.switchWorkspaceViewMode = function(mode) {
   currentWorkspaceViewMode = mode;
   updateHeaderViewModeButtons();
@@ -457,12 +452,25 @@ window.switchWorkspaceViewMode = function(mode) {
 };
 
 function updateHeaderViewModeButtons() {
-  const tBtn = document.getElementById('header-timeline-btn');
-  const lBtn = document.getElementById('header-labelline-btn');
+  const notesModeBtn = document.getElementById('header-notes-mode-btn');
   const trkBtn = document.getElementById('header-tracker-btn');
-  if (tBtn) tBtn.classList.toggle('active-mode', currentWorkspaceViewMode === 'TIMELINE');
-  if (lBtn) lBtn.classList.toggle('active-mode', currentWorkspaceViewMode === 'LABELLINE');
-  if (trkBtn) trkBtn.classList.toggle('active-mode', currentWorkspaceViewMode === 'TRACKER');
+
+  if (notesModeBtn) {
+    const isNotesView = (currentWorkspaceViewMode === 'TIMELINE' || currentWorkspaceViewMode === 'LABELLINE');
+    notesModeBtn.classList.toggle('active-mode', isNotesView);
+
+    if (currentWorkspaceViewMode === 'TIMELINE') {
+      notesModeBtn.innerHTML = `<span class="header-btn-icon">📅</span>`;
+      notesModeBtn.title = "Current: Timeline View (Click to switch to Label Line View)";
+    } else {
+      notesModeBtn.innerHTML = `<span class="header-btn-icon">🏷️</span>`;
+      notesModeBtn.title = "Current: Label Line View (Click to switch to Timeline View)";
+    }
+  }
+
+  if (trkBtn) {
+    trkBtn.classList.toggle('active-mode', currentWorkspaceViewMode === 'TRACKER');
+  }
 }
 
 window.toggleWorkspaceLayoutView = function() {
@@ -3026,10 +3034,6 @@ function renderNotes() {
     else if (currentLabelFilter === 'NO_DATE') fl = fl.filter(n => !n.dueDate);
     else if (currentLabelFilter !== 'ALL') fl = fl.filter(n => n.labels && n.labels.includes(currentLabelFilter));
     
-    if (filterHardDeadlinesOnly) {
-      fl = fl.filter(n => n.isStrict);
-    }
-
     const sortByDateThenCreated = (a, b) => {
       if (!a.dueDate && b.dueDate) return 1;
       if (a.dueDate && !b.dueDate) return -1;

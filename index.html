@@ -11,18 +11,12 @@
   <!-- Consolidated Sticky Top Header with All Core Controls -->
   <div class="top-header">
     <div class="header-panel-left">
-      <button class="menu-toggle-btn strict-toggle-header-btn icon-only-compact-btn" id="header-strict-btn" onclick="toggleHardDeadlinesFilterHeader()" title="Filter Hard Deadlines">
-        <span class="header-btn-icon">🚨</span>
-      </button>
       <button class="menu-toggle-btn undo-header-btn icon-only-compact-btn" id="header-undo-btn" onclick="triggerGlobalUndo()" title="Nothing to undo" disabled>
         <span class="header-btn-icon">↩️</span>
       </button>
       
       <!-- Workspace View Switchers -->
-      <button class="menu-toggle-btn view-toggle-compact-btn icon-only-compact-btn active-mode" id="header-timeline-btn" onclick="switchWorkspaceViewMode('TIMELINE')" title="Switch to Timeline View">
-        <span class="header-btn-icon">📅</span>
-      </button>
-      <button class="menu-toggle-btn view-toggle-compact-btn icon-only-compact-btn" id="header-labelline-btn" onclick="switchWorkspaceViewMode('LABELLINE')" title="Switch to Label Line View">
+      <button class="menu-toggle-btn view-toggle-compact-btn icon-only-compact-btn active-mode" id="header-notes-mode-btn" onclick="toggleNotesViewMode()" title="Current: Label Line View (Click for Timeline View)">
         <span class="header-btn-icon">🏷️</span>
       </button>
       <button class="menu-toggle-btn view-toggle-compact-btn icon-only-compact-btn" id="header-tracker-btn" onclick="switchWorkspaceViewMode('TRACKER')" title="Switch to Tracker Tasks View">
