@@ -68,6 +68,11 @@ const timelineCollapsedState = {
 // Label Line Collapsed State dictionary
 const labelLineCollapsedState = {};
 
+// Tracker Label Line Collapsed State dictionary
+const trackerLabelLineCollapsedState = {
+  pinned: true
+};
+
 /* -------------------------------------------------------------
     UNDO BUFFER & CONTROLLER
 ------------------------------------------------------------- */
@@ -298,6 +303,9 @@ window.toggleTrackerLabelPin = async function(event, labelName) {
   }
   pinnedTrackerLabelsRegistry = updatedRegistry;
   renderSidebars();
+  if (currentWorkspaceViewMode === 'TRACKER') {
+    renderHabitsDashboard();
+  }
   await setDoc(habitsDocRef, { pinnedTrackerLabels: updatedRegistry }, { merge: true });
 };
 
@@ -504,8 +512,21 @@ window.toggleAllSectionsUnified = function() {
       labelLineCollapsedState[key] = targetState;
     });
     timelineCollapsedState.pinned = targetState;
-  } else {
-    toggleHabitsDashboardCollapse();
+  } else if (currentWorkspaceViewMode === 'TRACKER') {
+    const allTrackerLabels = Array.from(getUniqueTrackerLabels());
+    allTrackerLabels.forEach(l => {
+      if (trackerLabelLineCollapsedState[l] === undefined) trackerLabelLineCollapsedState[l] = true;
+    });
+    if (trackerLabelLineCollapsedState['__NO_LABEL__'] === undefined) {
+      trackerLabelLineCollapsedState['__NO_LABEL__'] = true;
+    }
+    const sectionKeys = Object.keys(trackerLabelLineCollapsedState);
+    const hasAnyCollapsed = sectionKeys.some(key => trackerLabelLineCollapsedState[key] === true);
+    const targetState = !hasAnyCollapsed;
+    sectionKeys.forEach(key => {
+      trackerLabelLineCollapsedState[key] = targetState;
+    });
+    renderHabitsDashboard();
     return;
   }
   renderNotes();
@@ -560,6 +581,55 @@ window.toggleLabelLineSectionCollapse = function(labelKey) {
   }
   labelLineCollapsedState[labelKey] = !labelLineCollapsedState[labelKey];
   renderNotes();
+};
+
+window.toggleTrackerLabelLineSectionCollapse = function(labelKey) {
+  if (trackerLabelLineCollapsedState[labelKey] === undefined) {
+    trackerLabelLineCollapsedState[labelKey] = true;
+  }
+  trackerLabelLineCollapsedState[labelKey] = !trackerLabelLineCollapsedState[labelKey];
+  renderHabitsDashboard();
+};
+
+window.editTrackerLabelNameGlobal = async function(oldName, newNameRaw) {
+  const newName = newNameRaw.trim();
+  if (!newName || newName === oldName) return;
+
+  habits.forEach(h => {
+    if (h.labels && h.labels.includes(oldName)) {
+      h.labels = h.labels.map(x => x === oldName ? newName : x);
+    }
+  });
+  if (pinnedTrackerLabelsRegistry.includes(oldName)) {
+    pinnedTrackerLabelsRegistry = pinnedTrackerLabelsRegistry.map(x => x === oldName ? newName : x);
+  }
+  if (currentTrackerLabelFilter === oldName) {
+    currentTrackerLabelFilter = newName;
+  }
+  renderSidebars();
+  if (currentWorkspaceViewMode === 'TRACKER') {
+    renderHabitsDashboard();
+  }
+  updateTopHeaderLabels();
+  await setDoc(habitsDocRef, { habitsList: habits, pinnedTrackerLabels: pinnedTrackerLabelsRegistry }, { merge: true });
+};
+
+window.deleteTrackerLabelGlobal = async function(labelName) {
+  habits.forEach(h => {
+    if (h.labels && h.labels.includes(labelName)) {
+      h.labels = h.labels.filter(x => x !== labelName);
+    }
+  });
+  pinnedTrackerLabelsRegistry = pinnedTrackerLabelsRegistry.filter(x => x !== labelName);
+  if (currentTrackerLabelFilter === labelName) {
+    currentTrackerLabelFilter = 'ALL';
+  }
+  renderSidebars();
+  if (currentWorkspaceViewMode === 'TRACKER') {
+    renderHabitsDashboard();
+  }
+  updateTopHeaderLabels();
+  await setDoc(habitsDocRef, { habitsList: habits, pinnedTrackerLabels: pinnedTrackerLabelsRegistry }, { merge: true });
 };
 
 window.toggleNoteCardExpand = function(event, noteId) {
@@ -1535,7 +1605,7 @@ function renderHabitsDashboard() {
 
   const pinnedRegistry = Array.isArray(pinnedHabitsRegistry) ? pinnedHabitsRegistry : [];
   const pinnedHabits = filteredHabits.filter(h => pinnedRegistry.includes(h.id));
-  const unpinnedHabits = filteredHabits.filter(h => !pinnedRegistry.includes(h.id));
+  const regularHabits = filteredHabits.filter(h => !pinnedRegistry.includes(h.id));
 
   const sortHabitsGroup = (habitList) => {
     return [...habitList].sort((a,b) => {
@@ -1545,26 +1615,6 @@ function renderHabitsDashboard() {
       return (a.name || '').localeCompare(b.name || '');
     });
   };
-
-  const sortedPinned = sortHabitsGroup(pinnedHabits);
-  const sortedUnpinned = sortHabitsGroup(unpinnedHabits);
-
-  const arrowSymbol = isHabitsDashboardCollapsed ? '▶' : '▼';
-  const collapseClassStr = isHabitsDashboardCollapsed ? 'collapsed' : '';
-
-  let html = `
-    <div class="tracker-dashboard-header" onclick="toggleHabitsDashboardCollapse()" title="Click to Collapse / Expand Daily Task Tracker">
-      <div style="display:flex; align-items:center; gap:8px;">
-        <span style="font-size: 11px; font-weight: 800; color: #1a73e8; letter-spacing: 0.05em; text-transform: uppercase;">Tracker Tasks <span id="tracker-collapse-arrow" style="font-size: 9px; margin-left: 4px;">${arrowSymbol}</span></span>
-      </div>
-    </div>
-  `;
-
-  if(filteredHabits.length === 0) {
-    html += `<div id="tracker-grid-content" class="tracker-dashboard-grid ${collapseClassStr}"><div style="font-size:12px; font-style:italic; padding:10px; color:#5f6368; text-align:center;">No task tracker items found for this filter. Add one using the ＋ Tracker button on top!</div></div>`;
-    targetPanel.innerHTML = html;
-    return;
-  }
 
   const daysOfWeek = ['M', 'T', 'W', 'Th', 'F', 'Sa', 'Su'];
 
@@ -1587,9 +1637,9 @@ function renderHabitsDashboard() {
     const safeMinRule = (h.minRuleText || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
     let cardHTML = `
-      <div class="sidebar-item ${isExecuteNow ? 'execute-now-item' : bgClass}" style="flex-direction: column; align-items: flex-start; gap: 4px; padding: 6px 8px; margin-bottom: 0;">
+      <div class="sidebar-item ${isExecuteNow ? 'execute-now-item' : bgClass}" style="flex-direction: column; align-items: flex-start; gap: 4px; padding: 6px 8px; margin-bottom: 0; border: 1px solid #e0e0e0;">
         <div style="display:flex; width:100%; align-items:center; gap:6px;">
-          <span class="sidebar-pin-toggle" onclick="toggleHabitPin(event, '${h.id}')" title="${isPinned ? 'Unpin' : 'Pin to Focus'}">${pinIcon}</span>
+          <span class="sidebar-pin-toggle" onclick="toggleHabitPin(event, '${h.id}')" title="${isPinned ? 'Unpin' : 'Pin to Execute Now'}">${pinIcon}</span>
           
           <div style="position:relative; display:inline-flex;">
             <button class="icon-picker-btn" onclick="toggleTrackerCardLabelMenu(event, '${h.id}')" title="Assign / Change Tracker Label" style="height:22px; padding:0 4px; font-size:10px;">🏷️</button>
@@ -1597,7 +1647,7 @@ function renderHabitsDashboard() {
               <div class="popover-header-fixed">
                 <div class="popover-section-title">Label tracker task</div>
                 <div class="popover-input-wrapper">
-                  <input type="text" id="tracker-card-search-${h.id}" placeholder="Enter label name" oninput="handleTrackerCardLabelSearchInput('${h.id}', this.value)">
+                  <input type="text" id="tracker-card-search-${h.id}" class="label-input" placeholder="Enter label name" oninput="handleTrackerCardLabelSearchInput('${h.id}', this.value)">
                   <span class="search-icon">🔍</span>
                 </div>
               </div>
@@ -1664,10 +1714,103 @@ function renderHabitsDashboard() {
     return cardHTML;
   };
 
-  html += `<div id="tracker-grid-content" class="tracker-dashboard-grid ${collapseClassStr}">`;
-  sortedPinned.forEach(h => { html += renderSingleHabitCard(h, true); });
-  sortedUnpinned.forEach(h => { html += renderSingleHabitCard(h, false); });
-  html += `</div>`;
+  let html = "";
+
+  // 1. FIXED ANCHOR: ⚡ EXECUTE NOW (Pinned Tracker Tasks)
+  const pinnedCollapsed = trackerLabelLineCollapsedState.pinned !== undefined ? trackerLabelLineCollapsedState.pinned : true;
+  const pinnedArrow = pinnedCollapsed ? '▶' : '▼';
+  const sortedPinned = sortHabitsGroup(pinnedHabits);
+
+  html += `
+    <div class="section-title execute-now-section-title" onclick="toggleTrackerLabelLineSectionCollapse('pinned')">
+      <span>⚡ EXECUTE NOW <span style="font-size: 9px; margin-left: 2px;">${pinnedArrow}</span></span>
+      <span>(${sortedPinned.length})</span>
+    </div>
+  `;
+
+  if (sortedPinned.length > 0) {
+    html += `<div class="tracker-dashboard-grid ${pinnedCollapsed ? 'collapsed' : ''}" style="margin-bottom: 12px;">`;
+    sortedPinned.forEach(h => { html += renderSingleHabitCard(h, true); });
+    html += `</div>`;
+  } else {
+    html += `<div class="tracker-dashboard-grid ${pinnedCollapsed ? 'collapsed' : ''}" style="font-size:12px; color:#80868b; font-style:italic; padding:2px 0 8px 12px;">No tasks</div>`;
+  }
+
+  // 2. TRACKER LABEL LINE SECTIONS
+  const allTrackerLabels = Array.from(getUniqueTrackerLabels());
+  const pinnedLabelRegistry = Array.isArray(pinnedTrackerLabelsRegistry) ? pinnedTrackerLabelsRegistry : [];
+
+  const pinnedLabels = allTrackerLabels.filter(l => pinnedLabelRegistry.includes(l)).sort((a,b) => a.localeCompare(b));
+  const unpinnedLabels = allTrackerLabels.filter(l => !pinnedLabelRegistry.includes(l)).sort((a,b) => a.localeCompare(b));
+  const noLabelHabits = regularHabits.filter(h => !h.labels || h.labels.length === 0);
+
+  const renderSingleTrackerLabelSection = (labelName, isPinnedLabel, isNoLabel = false) => {
+    const labelKey = isNoLabel ? '__NO_LABEL__' : labelName;
+    if (trackerLabelLineCollapsedState[labelKey] === undefined) {
+      trackerLabelLineCollapsedState[labelKey] = true;
+    }
+    const isCollapsed = trackerLabelLineCollapsedState[labelKey];
+    const arrow = isCollapsed ? '▶' : '▼';
+
+    let matchingHabits = [];
+    if (isNoLabel) {
+      matchingHabits = sortHabitsGroup(noLabelHabits);
+    } else {
+      matchingHabits = sortHabitsGroup(regularHabits.filter(h => h.labels && h.labels.includes(labelName)));
+    }
+
+    const base64 = btoa(encodeURIComponent(labelName)).replace(/=/g, '');
+    const secClass = isPinnedLabel ? 'label-pinned-section-title' : 'macro-section-title';
+
+    let pinIconHTML = '';
+    let dotsMenuHTML = '';
+
+    if (!isNoLabel) {
+      pinIconHTML = `<span class="sidebar-pin-toggle" onclick="event.stopPropagation(); toggleTrackerLabelPin(event, '${labelName.replace(/'/g, "\\'")}')" title="${isPinnedLabel ? 'Unpin Label Priority' : 'Pin Label to Top Priority'}">${isPinnedLabel ? '📌' : '📍'}</span>`;
+      dotsMenuHTML = `
+        <span class="sidebar-dots-trigger" onclick="toggleSidebarChipPopover(event, 'trk-hdr-${base64}')" title="Label Actions">⋮</span>
+        <div class="chip-popover-menu" id="chip-popover-trk-hdr-${base64}" onclick="event.stopPropagation();">
+          <div class="popover-header-fixed">
+            <div class="popover-section-title">Edit Name</div>
+            <input type="text" class="chip-inline-input" value="${labelName}" onchange="editTrackerLabelNameGlobal('${labelName.replace(/'/g, "\\'")}', this.value)">
+          </div>
+          <button class="chip-popover-btn delete-action" onclick="deleteTrackerLabelGlobal('${labelName.replace(/'/g, "\\'")}');">🗑️ Delete Label</button>
+        </div>
+      `;
+    }
+
+    const labelTitleDisplay = isNoLabel ? `⚪ NO LABEL` : `🏷️ ${labelName}`;
+
+    html += `
+      <div class="section-title ${secClass}" onclick="toggleTrackerLabelLineSectionCollapse('${labelKey.replace(/'/g, "\\'")}')">
+        <div style="display:flex; align-items:center; gap:6px;">
+          ${pinIconHTML}
+          <span>${labelTitleDisplay} <span style="font-size: 9px; margin-left: 2px;">${arrow}</span></span>
+        </div>
+        <span>(${matchingHabits.length})</span>
+        ${dotsMenuHTML}
+      </div>
+    `;
+
+    if (matchingHabits.length > 0) {
+      html += `<div class="tracker-dashboard-grid ${isCollapsed ? 'collapsed' : ''}" style="margin-bottom: 12px;">`;
+      matchingHabits.forEach(h => { html += renderSingleHabitCard(h, false); });
+      html += `</div>`;
+    } else {
+      html += `<div class="tracker-dashboard-grid ${isCollapsed ? 'collapsed' : ''}" style="font-size:12px; color:#80868b; font-style:italic; padding:4px 0 12px 12px;">No tasks</div>`;
+    }
+  };
+
+  if (currentTrackerLabelFilter === 'ALL') {
+    pinnedLabels.forEach(lbl => renderSingleTrackerLabelSection(lbl, true, false));
+    unpinnedLabels.forEach(lbl => renderSingleTrackerLabelSection(lbl, false, false));
+    renderSingleTrackerLabelSection('No Label', false, true);
+  } else if (currentTrackerLabelFilter === 'NONE') {
+    renderSingleTrackerLabelSection('No Label', false, true);
+  } else {
+    const isPinnedLbl = pinnedLabelRegistry.includes(currentTrackerLabelFilter);
+    renderSingleTrackerLabelSection(currentTrackerLabelFilter, isPinnedLbl, false);
+  }
 
   targetPanel.innerHTML = html;
 }
@@ -3020,7 +3163,7 @@ function renderNotes() {
     if (isTrackerMode) {
       const trackerDashboardDiv = document.createElement('div');
       trackerDashboardDiv.id = 'habits-dashboard-target';
-      trackerDashboardDiv.className = 'tracker-dashboard-container';
+      trackerDashboardDiv.style.width = '100%';
       workspaceTarget.appendChild(trackerDashboardDiv);
       renderHabitsDashboard();
       return;
