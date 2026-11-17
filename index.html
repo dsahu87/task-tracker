@@ -32,7 +32,7 @@
     </div>
 
     <div class="header-panel-right">
-      <button class="menu-toggle-btn label-sidebar-header-btn" id="header-label-btn" onclick="toggleLabelSidebarDrawer(event)" title="Toggle Labels Drawer">
+      <button class="menu-toggle-btn label-sidebar-header-btn" id="header-label-btn" style="cursor:default;">
         <span class="header-btn-icon">🏷️</span><span>All Notes</span><span style="font-weight:700; color:#1a73e8; font-size:10px;">(0)</span>
       </button>
       <button class="habit-add-btn" id="header-add-tracker-btn" onclick="openTrackerCreatorModal(event)" title="Create Tracker Task" style="display:none; align-items:center; gap:2px;">
@@ -42,23 +42,12 @@
   </div>
 
   <div class="loading-status" id="loading">Syncing workspace...</div>
-  <div class="sidebar-overlay" id="overlay" onclick="closeAllSidebars()"></div>
 
   <!-- Floating Undo Toast Notification -->
   <div class="undo-toast-bar" id="undo-toast">
     <span id="undo-toast-text">Item deleted</span>
     <button class="undo-toast-action-btn" onclick="triggerGlobalUndo()">Undo</button>
     <button class="undo-toast-close" onclick="hideUndoToast()">✕</button>
-  </div>
-
-  <!-- Sliding Off-Canvas Labels Drawer -->
-  <div class="sidebars-wrapper" id="sidebars-wrapper-el">
-    <div class="sidebar-drawer-header">
-      <span class="sidebar-drawer-title">🏷️ Workspace Labels</span>
-      <button class="sidebar-drawer-close-btn" onclick="closeAllSidebars()" title="Close Drawers">✕</button>
-    </div>
-    <div class="label-sidebar" id="tracker-sidebar"></div>
-    <div class="label-sidebar" id="label-sidebar"></div>
   </div>
 
   <div class="main-layout">
