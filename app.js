@@ -33,6 +33,12 @@ let selectedInlineCreatorLabels = [];
 let inlineCreatorChecklistLines = [];
 let inlineCreatorColorState = '#ffffff';
 
+// Inline Tracker Creator State
+let isInlineTrackerCreatorExpanded = false;
+let inlineTrackerCreatorPinnedState = false;
+let inlineTrackerCreatorTypeState = 'boolean';
+let selectedInlineTrackerCreatorLabels = [];
+
 let pinnedLabelsRegistry = []; 
 let pinnedHabitsRegistry = [];
 let pinnedTrackerLabelsRegistry = [];
@@ -247,7 +253,7 @@ function updateTopHeaderLabels() {
   const addTrackerBtn = document.getElementById('header-add-tracker-btn');
 
   if (addTrackerBtn) {
-    addTrackerBtn.style.display = isTracker ? 'inline-flex' : 'none';
+    addTrackerBtn.style.display = 'none';
   }
 
   if (labelBtn) {
@@ -1255,6 +1261,211 @@ async function updateNoteField(id, updatedFields) {
 window.autoScaleTextarea = function(element) {
   element.style.height = 'auto';
   element.style.height = element.scrollHeight + 'px';
+};
+/* INLINE TRACKER TASK CREATOR CONTROLLER */
+window.expandInlineTrackerCreator = function(event) {
+  if (event) event.stopPropagation();
+  if (isInlineTrackerCreatorExpanded) return;
+  isInlineTrackerCreatorExpanded = true;
+  selectedInlineTrackerCreatorLabels = [];
+  if (currentTrackerLabelFilter !== 'ALL' && currentTrackerLabelFilter !== 'NONE') {
+    selectedInlineTrackerCreatorLabels.push(currentTrackerLabelFilter);
+  }
+  renderNotes();
+  setTimeout(() => {
+    const titleEl = document.getElementById('inline-trk-title');
+    if (titleEl) titleEl.focus();
+  }, 20);
+};
+
+window.saveAndCloseInlineTrackerCreator = async function(event) {
+  if (event) event.stopPropagation();
+  if (!isInlineTrackerCreatorExpanded) return;
+
+  const titleInput = document.getElementById('inline-trk-title');
+  const minRuleInput = document.getElementById('inline-trk-minrule');
+  const labelSearchInput = document.getElementById('inline-trk-label-search');
+
+  if (labelSearchInput) {
+    const typedLabel = labelSearchInput.value.trim();
+    if (typedLabel && !selectedInlineTrackerCreatorLabels.includes(typedLabel)) {
+      selectedInlineTrackerCreatorLabels.push(typedLabel);
+    }
+  }
+
+  const name = titleInput ? titleInput.value.trim() : '';
+  const minRuleText = minRuleInput ? minRuleInput.value.trim() : '';
+
+  if (!name) {
+    resetInlineTrackerCreatorState();
+    renderNotes();
+    return;
+  }
+
+  let integratedLabels = [...selectedInlineTrackerCreatorLabels];
+  if (currentTrackerLabelFilter !== 'ALL' && currentTrackerLabelFilter !== 'NONE') {
+    if (!integratedLabels.includes(currentTrackerLabelFilter)) {
+      integratedLabels.push(currentTrackerLabelFilter);
+    }
+  }
+
+  const pinState = inlineTrackerCreatorPinnedState;
+  const typeState = inlineTrackerCreatorTypeState;
+  const finalLabels = [...integratedLabels];
+
+  resetInlineTrackerCreatorState();
+
+  const uniqueId = 'hbt_' + Date.now();
+  const newHabitObj = {
+    id: uniqueId,
+    name: name,
+    habitType: typeState,
+    minRuleText: minRuleText,
+    labels: finalLabels,
+    yearlyGrid: {}
+  };
+  newHabitObj.yearlyGrid["W" + currentGlobalWeekNumber] = { M: null, T: null, W: null, Th: null, F: null, Sa: null, Su: null };
+
+  habits.push(newHabitObj);
+  if (pinState) {
+    if (!pinnedHabitsRegistry.includes(uniqueId)) pinnedHabitsRegistry.push(uniqueId);
+  }
+
+  renderSidebars();
+  renderNotes();
+  updateTopHeaderLabels();
+
+  await setDoc(habitsDocRef, { habitsList: habits, pinnedHabits: pinnedHabitsRegistry }, { merge: true });
+};
+
+window.discardInlineTrackerCreator = function(event) {
+  if (event) {
+    event.stopPropagation();
+    event.preventDefault();
+  }
+  resetInlineTrackerCreatorState();
+  renderNotes();
+};
+
+function resetInlineTrackerCreatorState() {
+  isInlineTrackerCreatorExpanded = false;
+  inlineTrackerCreatorPinnedState = false;
+  inlineTrackerCreatorTypeState = 'boolean';
+  selectedInlineTrackerCreatorLabels = [];
+}
+
+window.toggleInlineTrackerCreatorPin = function(event) {
+  if (event) event.stopPropagation();
+  inlineTrackerCreatorPinnedState = !inlineTrackerCreatorPinnedState;
+  const b = document.getElementById('inline-trk-pin-btn');
+  if (b) b.innerText = inlineTrackerCreatorPinnedState ? '📌' : '📍';
+};
+
+window.setInlineTrackerCreatorType = function(event, type) {
+  if (event) event.stopPropagation();
+  inlineTrackerCreatorTypeState = type;
+  document.querySelectorAll('.inline-trk-type-btn').forEach(btn => {
+    if (btn.dataset.type === type) {
+      btn.style.background = '#e8f0fe';
+      btn.style.borderColor = '#1a73e8';
+      btn.style.color = '#1a73e8';
+    } else {
+      btn.style.background = '#fff';
+      btn.style.borderColor = '#dadce0';
+      btn.style.color = '#5f6368';
+    }
+  });
+};
+
+window.toggleInlineTrackerCreatorCheckboxMenu = function(event) {
+  if (event) event.stopPropagation();
+  document.querySelectorAll('.checkbox-dropdown-menu').forEach(m => {
+    if (m.id !== 'inline-trk-checkbox-menu') m.classList.remove('show');
+  });
+  const menu = document.getElementById('inline-trk-checkbox-menu');
+  if (menu) {
+    const isShowing = menu.classList.toggle('show');
+    if (isShowing) {
+      renderInlineTrackerCreatorLabelsDropdown('');
+      setTimeout(() => {
+        const inputEl = document.getElementById('inline-trk-label-search');
+        if (inputEl) inputEl.focus();
+      }, 10);
+    }
+  }
+};
+
+function renderInlineTrackerCreatorLabelsDropdown(searchTerm = "") {
+  const sb = document.getElementById('inline-trk-label-scroll');
+  if (!sb) return;
+  const all = getUniqueTrackerLabels();
+  let h = "";
+  let exactMatch = false;
+
+  all.forEach(l => {
+    if (l.toLowerCase() === searchTerm.toLowerCase()) exactMatch = true;
+    if (!searchTerm || l.toLowerCase().includes(searchTerm.toLowerCase())) {
+      const isChecked = selectedInlineTrackerCreatorLabels.includes(l) ? 'checked' : '';
+      h += `
+        <label class="checkbox-item" onclick="event.stopPropagation();">
+          <input type="checkbox" value="${l}" ${isChecked} onchange="handleInlineTrackerCreatorLabelToggle(this.value, this.checked)">
+          <span>${l}</span>
+        </label>
+      `;
+    }
+  });
+
+  if (searchTerm && !exactMatch) {
+    h = `
+      <div class="checkbox-item" onclick="event.stopPropagation(); addNewInlineTrackerCreatorLabel('${searchTerm.replace(/'/g, "\\'")}')" style="color:#1a73e8; font-weight:600;">
+        <span>➕ Create "${searchTerm}"</span>
+      </div>
+    ` + h;
+  }
+
+  if (!h) {
+    h = `<div style="font-size:12px; color:#5f6368; padding:6px;">No matching labels</div>`;
+  }
+  sb.innerHTML = h;
+}
+
+window.handleInlineTrackerCreatorLabelToggle = function(labelVal, isChecked) {
+  if (isChecked) {
+    if (!selectedInlineTrackerCreatorLabels.includes(labelVal)) selectedInlineTrackerCreatorLabels.push(labelVal);
+  } else {
+    selectedInlineTrackerCreatorLabels = selectedInlineTrackerCreatorLabels.filter(l => l !== labelVal);
+  }
+  renderInlineTrackerCreatorSelectedLabelsBar();
+};
+
+window.addNewInlineTrackerCreatorLabel = function(labelName) {
+  labelName = labelName.trim();
+  if (!labelName) return;
+  if (!selectedInlineTrackerCreatorLabels.includes(labelName)) selectedInlineTrackerCreatorLabels.push(labelName);
+  renderInlineTrackerCreatorSelectedLabelsBar();
+  renderInlineTrackerCreatorLabelsDropdown('');
+};
+
+function renderInlineTrackerCreatorSelectedLabelsBar() {
+  const container = document.getElementById('inline-trk-selected-labels-bar');
+  if (!container) return;
+  if (selectedInlineTrackerCreatorLabels.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+  container.innerHTML = selectedInlineTrackerCreatorLabels.map(l => `
+    <span class="modal-label-chip">
+      🏷️ ${l}
+      <span class="modal-label-chip-remove" onclick="removeInlineTrackerCreatorLabelChip(event, '${l.replace(/'/g, "\\'")}')">✕</span>
+    </span>
+  `).join('');
+}
+
+window.removeInlineTrackerCreatorLabelChip = function(event, lbl) {
+  if (event) event.stopPropagation();
+  selectedInlineTrackerCreatorLabels = selectedInlineTrackerCreatorLabels.filter(l => l !== lbl);
+  renderInlineTrackerCreatorSelectedLabelsBar();
+  renderInlineTrackerCreatorLabelsDropdown('');
 };
 
 let trackerModalSelectedType = 'boolean';
@@ -2594,6 +2805,13 @@ document.addEventListener('click', (e) => {
     }
   }
 
+  const inlineTrackerCreatorBox = document.getElementById('inline-tracker-creator-box');
+  if (isInlineTrackerCreatorExpanded && inlineTrackerCreatorBox && !inlineTrackerCreatorBox.contains(e.target)) {
+    if (!e.target.closest('.checkbox-dropdown-menu') && !e.target.closest('.dropdown-menu')) {
+      saveAndCloseInlineTrackerCreator(e);
+    }
+  }
+
   if (activeInlineEditingNoteId) {
     const activeEditingCard = document.getElementById(`note-card-${activeInlineEditingNoteId}`);
     if (activeEditingCard && !activeEditingCard.contains(e.target)) {
@@ -2648,10 +2866,12 @@ document.addEventListener('keydown', (e) => {
 
   if ((e.ctrlKey || e.metaKey) && e.code === 'Space') {
     e.preventDefault();
-    expandInlineCreator(e);
+    if (currentWorkspaceViewMode === 'TRACKER') expandInlineTrackerCreator(e);
+    else expandInlineCreator(e);
   }
   if (e.key === 'Escape') {
     if (isInlineCreatorExpanded) discardInlineCreatorNote(e);
+    if (isInlineTrackerCreatorExpanded) discardInlineTrackerCreator(e);
     if (activeInlineEditingNoteId) cancelInCardEditing(null, activeInlineEditingNoteId);
     if (currentlyExpandedNoteId) {
       currentlyExpandedNoteId = null;
@@ -2741,6 +2961,73 @@ function renderSidebars() {
     unpinnedList.forEach(l => { h += renderLabelItem(l, false); });
     sbTimeline.innerHTML = h;
   }
+}
+
+function createInlineTrackerCreatorDOM() {
+  const container = document.createElement('div');
+  container.id = 'inline-tracker-creator-box';
+  container.className = 'inline-note-creator-container';
+  container.style.backgroundColor = '#ffffff';
+
+  if (!isInlineTrackerCreatorExpanded) {
+    container.innerHTML = `
+      <div class="inline-creator-collapsed-bar" onclick="expandInlineTrackerCreator(event)">
+        <span>Create a tracker task...</span>
+        <div class="inline-creator-collapsed-tools" onclick="event.stopPropagation();">
+          <button class="icon-picker-btn" style="height:26px; min-width:28px; padding:2px 6px;" onclick="expandInlineTrackerCreator(event); setInlineTrackerCreatorType(event, 'boolean');" title="Checkmark tracker">☑️</button>
+          <button class="icon-picker-btn" style="height:26px; min-width:28px; padding:2px 6px;" onclick="expandInlineTrackerCreator(event); setInlineTrackerCreatorType(event, 'count');" title="Numeric Count tracker">🔢</button>
+          <button class="icon-picker-btn" style="height:26px; min-width:28px; padding:2px 6px;" onclick="expandInlineTrackerCreator(event); setInlineTrackerCreatorType(event, 'log');" title="Detailed Log tracker">📝</button>
+          <button class="icon-picker-btn" style="height:26px; min-width:28px; padding:2px 6px;" onclick="expandInlineTrackerCreator(event); toggleInlineTrackerCreatorCheckboxMenu(event);" title="Assign labels">🏷️</button>
+        </div>
+      </div>
+    `;
+    return container;
+  }
+
+  const getBtnStyle = (t) => inlineTrackerCreatorTypeState === t
+    ? 'background:#e8f0fe; border-color:#1a73e8; color:#1a73e8; font-weight:700;'
+    : 'background:#fff; border-color:#dadce0; color:#5f6368;';
+
+  container.innerHTML = `
+    <div class="card-edit-toolbar" onclick="event.stopPropagation();">
+      <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap;">
+        <button class="icon-picker-btn inline-trk-type-btn" data-type="boolean" style="height:24px; padding:2px 6px; font-size:11px; ${getBtnStyle('boolean')}" onclick="setInlineTrackerCreatorType(event, 'boolean')" title="Checkmark Task">☑️ Check</button>
+        <button class="icon-picker-btn inline-trk-type-btn" data-type="count" style="height:24px; padding:2px 6px; font-size:11px; ${getBtnStyle('count')}" onclick="setInlineTrackerCreatorType(event, 'count')" title="Numeric Count Task">🔢 Count</button>
+        <button class="icon-picker-btn inline-trk-type-btn" data-type="log" style="height:24px; padding:2px 6px; font-size:11px; ${getBtnStyle('log')}" onclick="setInlineTrackerCreatorType(event, 'log')" title="Detailed Log Task">📝 Log</button>
+
+        <div style="position:relative; display:inline-block;">
+          <button class="icon-picker-btn" style="height:24px; min-width:24px; padding:2px 6px; font-size:11px;" onclick="toggleInlineTrackerCreatorCheckboxMenu(event)" title="Assign Tracker Labels">🏷️</button>
+          <div class="checkbox-dropdown-menu" id="inline-trk-checkbox-menu" onclick="event.stopPropagation();">
+            <div class="popover-header-fixed">
+              <div class="popover-section-title">Label tracker task</div>
+              <div class="popover-input-wrapper">
+                <input type="text" id="inline-trk-label-search" class="label-input" placeholder="Enter label name" oninput="renderInlineTrackerCreatorLabelsDropdown(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault(); addNewInlineTrackerCreatorLabel(this.value); this.value='';}">
+                <span class="search-icon">🔍</span>
+              </div>
+            </div>
+            <div class="popover-scroll-body" id="inline-trk-label-scroll"></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:4px;">
+        <button class="creator-pin-btn ${inlineTrackerCreatorPinnedState ? 'active' : ''}" id="inline-trk-pin-btn" style="font-size:14px; padding:2px; background:none; border:none; cursor:pointer;" onclick="toggleInlineTrackerCreatorPin(event)" title="Pin to Execute Now">${inlineTrackerCreatorPinnedState ? '📌' : '📍'}</button>
+        <button class="btn" style="padding:2px 8px; font-size:11px; height:26px; background:#5f6368;" onclick="discardInlineTrackerCreator(event)">Cancel</button>
+        <button class="btn" style="padding:2px 10px; font-size:11px; height:26px;" onclick="saveAndCloseInlineTrackerCreator(event)">Save</button>
+      </div>
+    </div>
+
+    <div class="modal-selected-labels-bar" id="inline-trk-selected-labels-bar"></div>
+
+    <input type="text" id="inline-trk-title" class="card-edit-title-input" placeholder="Tracker task title (e.g., Daily Workout, Code 1 hour)" onkeydown="if(event.key==='Enter'){event.preventDefault(); saveAndCloseInlineTrackerCreator(event);}">
+    <input type="text" id="inline-trk-minrule" class="card-edit-textarea" style="min-height:28px; height:28px; font-size:12px; color:#5f6368; margin-top:2px;" placeholder="⚡ 2-Min Fallback Rule (Optional, e.g., 5 Pushups)" onkeydown="if(event.key==='Enter'){event.preventDefault(); saveAndCloseInlineTrackerCreator(event);}">
+  `;
+
+  setTimeout(() => {
+    renderInlineTrackerCreatorSelectedLabelsBar();
+  }, 10);
+
+  return container;
 }
 
 function createInlineCreatorDOM() {
@@ -3161,6 +3448,7 @@ function renderNotes() {
     const isTimelineMode = (currentWorkspaceViewMode === 'TIMELINE');
 
     if (isTrackerMode) {
+      workspaceTarget.appendChild(createInlineTrackerCreatorDOM());
       const trackerDashboardDiv = document.createElement('div');
       trackerDashboardDiv.id = 'habits-dashboard-target';
       trackerDashboardDiv.style.width = '100%';
