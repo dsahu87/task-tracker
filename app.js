@@ -3053,14 +3053,6 @@ function createInlineCreatorDOM() {
   container.innerHTML = `
     <div class="card-edit-toolbar" onclick="event.stopPropagation();">
       <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap;">
-        <div class="color-chips-row" style="height:24px; padding:2px 4px; gap:4px;">
-          <div class="color-chip" style="width:14px; height:14px; background: #ffffff;" onclick="changeInlineCreatorColor(event, '#ffffff')"></div>
-          <div class="color-chip" style="width:14px; height:14px; background: #fff4cc;" onclick="changeInlineCreatorColor(event, '#fff4cc')"></div>
-          <div class="color-chip" style="width:14px; height:14px; background: #e6f4ea;" onclick="changeInlineCreatorColor(event, '#e6f4ea')"></div>
-          <div class="color-chip" style="width:14px; height:14px; background: #fce8e6;" onclick="changeInlineCreatorColor(event, '#fce8e6')"></div>
-          <div class="color-chip" style="width:14px; height:14px; background: #e8eaed;" onclick="changeInlineCreatorColor(event, '#e8eaed')"></div>
-        </div>
-
         <button class="icon-picker-btn" style="height:24px; min-width:24px; padding:2px 4px; font-size:11px;" onclick="toggleInlineCreatorNumberedList(event)" title="Format as 1.2.3 list">🔢</button>
         <button class="icon-picker-btn" style="height:24px; min-width:24px; padding:2px 4px; font-size:11px;" onclick="toggleInlineCreatorChecklistFormat(event)" title="Format as checkboxes">☑️</button>
 
@@ -3120,7 +3112,36 @@ function createInlineCreatorDOM() {
   return container;
 }
 
-function createNoteCardDOM(note, allUniqueLabels) {
+const AUTO_CARD_PALETTE = [
+  '#fef7e0', // 1. Soft Amber / Yellow
+  '#e8f0fe', // 2. Soft Periwinkle Blue
+  '#e6f4ea', // 3. Soft Mint Green
+  '#fce8e6', // 4. Soft Rose / Coral
+  '#f3e8fd', // 5. Soft Lavender
+  '#e4f7fb', // 6. Soft Cyan / Sky
+  '#feefe3', // 7. Soft Peach
+  '#fde7f3', // 8. Soft Pink
+  '#eef3fc', // 9. Soft Ice Indigo
+  '#f1f8e9', // 10. Soft Sage
+  '#fff8e1', // 11. Warm Cream
+  '#e0f2f1'  // 12. Soft Teal
+];
+
+function getUniqueCardColor(note, cardIndex = 0) {
+  // Uses the card's position (cardIndex) within its section so consecutive cards
+  // under the same label or timeline section always get distinct colors.
+  // Also offsets slightly by note.id so colors feel naturally varied across sections.
+  let idOffset = 0;
+  if (note && note.id) {
+    for (let i = 0; i < note.id.length; i++) {
+      idOffset += note.id.charCodeAt(i);
+    }
+  }
+  const colorIndex = (cardIndex + (idOffset % 3)) % AUTO_CARD_PALETTE.length;
+  return AUTO_CARD_PALETTE[colorIndex];
+}
+
+function createNoteCardDOM(note, allUniqueLabels, cardIndex = 0) {
   const isEditingThisCard = (activeInlineEditingNoteId === note.id);
   const isExpandedView = (currentlyExpandedNoteId === note.id);
   const card = document.createElement('div'); 
@@ -3128,7 +3149,7 @@ function createNoteCardDOM(note, allUniqueLabels) {
 
   if (isEditingThisCard) {
     card.className = `note-card in-card-editing-mode ${inCardPinnedState ? 'execute-now-card' : ''} ${inCardStrictState ? 'strict-deadline-accent' : ''}`;
-    card.style.backgroundColor = inCardColorState;
+    card.style.backgroundColor = getUniqueCardColor(note, cardIndex);
 
     const rawText = note.text || '';
     const isChecklist = inCardChecklistLines.length > 0 || rawText.includes('[ ]') || rawText.includes('[x]');
@@ -3185,7 +3206,7 @@ function createNoteCardDOM(note, allUniqueLabels) {
 
   // Read Card
   card.className = `note-card ${note.pinned ? 'execute-now-card' : ''} ${note.isStrict ? 'strict-deadline-accent' : ''}`; 
-  card.style.backgroundColor = note.color || '#ffffff';
+  card.style.backgroundColor = getUniqueCardColor(note, cardIndex);
   card.setAttribute('onclick', `startInCardEditing(event, '${note.id}')`);
   
   let isPast = false;
@@ -3338,16 +3359,8 @@ function createNoteCardDOM(note, allUniqueLabels) {
     <div class="menu-container" onclick="event.stopPropagation();">
       <button class="dots-btn" onclick="toggleDropdown(event, '${note.id}')">⋮</button>
       <div class="dropdown-menu" id="menu-${note.id}">
-        <div style="font-size:11px; font-weight:600; color:#5f6368; padding:2px 6px; margin-bottom:2px;">Card Color</div>
-        <div class="color-chips-row" style="margin-left:4px;">
-          <div class="color-chip" style="background:#ffffff;" onclick="changeCardTheme(event,'${note.id}','#ffffff')"></div>
-          <div class="color-chip" style="background:#fff4cc;" onclick="changeCardTheme(event,'${note.id}','#fff4cc')"></div>
-          <div class="color-chip" style="background:#e6f4ea;" onclick="changeCardTheme(event,'${note.id}','#e6f4ea')"></div>
-          <div class="color-chip" style="background:#fce8e6;" onclick="changeCardTheme(event,'${note.id}','#fce8e6')"></div>
-          <div class="color-chip" style="background:#e8eaed;" onclick="changeCardTheme(event,'${note.id}','#e8eaed')"></div>
-        </div>
-
         ${isChecklistFormat ? `
+
           <button class="dropdown-item-btn" onclick="uncheckAllItemsDirect(event, '${note.id}')">🔲 Uncheck all items</button>
           <button class="dropdown-item-btn" onclick="deleteCheckedItemsDirect(event, '${note.id}')">🗑️ Delete checked items</button>
         ` : ''}
@@ -3409,8 +3422,8 @@ function renderSectionMasonryGrid(cardsArray, colsCount, allUniqueLabels, isColl
     colElements.push(col);
   }
 
-  cardsArray.forEach((note) => {
-    const cardDOM = createNoteCardDOM(note, allUniqueLabels);
+  cardsArray.forEach((note, idx) => {
+    const cardDOM = createNoteCardDOM(note, allUniqueLabels, idx);
 
     if (colsCount === 1) {
       colElements[0].appendChild(cardDOM);
