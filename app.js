@@ -1816,10 +1816,13 @@ function renderHabitsDashboard() {
 
   const pinnedRegistry = Array.isArray(pinnedHabitsRegistry) ? pinnedHabitsRegistry : [];
   const pinnedHabits = filteredHabits.filter(h => pinnedRegistry.includes(h.id));
-  const regularHabits = filteredHabits.filter(h => !pinnedRegistry.includes(h.id));
+  const regularHabits = filteredHabits;
 
   const sortHabitsGroup = (habitList) => {
     return [...habitList].sort((a,b) => {
+      const aPinned = pinnedRegistry.includes(a.id);
+      const bPinned = pinnedRegistry.includes(b.id);
+      if (aPinned !== bPinned) return aPinned ? -1 : 1;
       const aCount = calculateWeeklyCompletedCount(a.yearlyGrid, currentWeekKey);
       const bCount = calculateWeeklyCompletedCount(b.yearlyGrid, currentWeekKey);
       if (aCount !== bCount) return aCount - bCount;
@@ -2003,7 +2006,7 @@ function renderHabitsDashboard() {
 
     if (matchingHabits.length > 0) {
       html += `<div class="tracker-dashboard-grid ${isCollapsed ? 'collapsed' : ''}" style="margin-bottom: 12px;">`;
-      matchingHabits.forEach(h => { html += renderSingleHabitCard(h, false); });
+      matchingHabits.forEach(h => { html += renderSingleHabitCard(h, pinnedRegistry.includes(h.id)); });
       html += `</div>`;
     } else {
       html += `<div class="tracker-dashboard-grid ${isCollapsed ? 'collapsed' : ''}" style="font-size:12px; color:#80868b; font-style:italic; padding:4px 0 12px 12px;">No tasks</div>`;
@@ -3477,6 +3480,7 @@ function renderNotes() {
     else if (currentLabelFilter !== 'ALL') fl = fl.filter(n => n.labels && n.labels.includes(currentLabelFilter));
     
     const sortByDateThenCreated = (a, b) => {
+      if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
       if (!a.dueDate && b.dueDate) return 1;
       if (a.dueDate && !b.dueDate) return -1;
       if (a.dueDate && b.dueDate) {
@@ -3493,9 +3497,9 @@ function renderNotes() {
 
     const allUniqueLabels = getUniqueLabels();
 
-   /* CONDITIONAL SECTION: PINNED NOTES */
+    /* CONDITIONAL SECTION: PINNED NOTES */
     const pinned = fl.filter(n => n.pinned);
-    const regular = fl.filter(n => !n.pinned);
+    const regular = fl;
 
     if (pinned.length > 0) {
       const pinnedCollapsed = timelineCollapsedState.pinned;
