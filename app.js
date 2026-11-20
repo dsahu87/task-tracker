@@ -1927,24 +1927,22 @@ function renderHabitsDashboard() {
 
   let html = "";
 
-  // 1. FIXED ANCHOR: ⚡ EXECUTE NOW (Pinned Tracker Tasks)
-  const pinnedCollapsed = trackerLabelLineCollapsedState.pinned !== undefined ? trackerLabelLineCollapsedState.pinned : true;
-  const pinnedArrow = pinnedCollapsed ? '▶' : '▼';
+  // 1. CONDITIONAL SECTION: PINNED TRACKERS (Pinned Tracker Tasks)
   const sortedPinned = sortHabitsGroup(pinnedHabits);
 
-  html += `
-    <div class="section-title execute-now-section-title" onclick="toggleTrackerLabelLineSectionCollapse('pinned')">
-      <span>⚡ EXECUTE NOW <span style="font-size: 9px; margin-left: 2px;">${pinnedArrow}</span></span>
-      <span>(${sortedPinned.length})</span>
-    </div>
-  `;
-
   if (sortedPinned.length > 0) {
-    html += `<div class="tracker-dashboard-grid ${pinnedCollapsed ? 'collapsed' : ''}" style="margin-bottom: 12px;">`;
+    const pinnedCollapsed = trackerLabelLineCollapsedState.pinned !== undefined ? trackerLabelLineCollapsedState.pinned : true;
+    const pinnedArrow = pinnedCollapsed ? '▶' : '▼';
+
+    html += `
+      <div class="section-title execute-now-section-title" onclick="toggleTrackerLabelLineSectionCollapse('pinned')">
+        <span>📌 PINNED TRACKERS <span style="font-size: 9px; margin-left: 2px;">${pinnedArrow}</span></span>
+        <span>(${sortedPinned.length})</span>
+      </div>
+      <div class="tracker-dashboard-grid ${pinnedCollapsed ? 'collapsed' : ''}" style="margin-bottom: 12px;">
+    `;
     sortedPinned.forEach(h => { html += renderSingleHabitCard(h, true); });
     html += `</div>`;
-  } else {
-    html += `<div class="tracker-dashboard-grid ${pinnedCollapsed ? 'collapsed' : ''}" style="font-size:12px; color:#80868b; font-style:italic; padding:2px 0 8px 12px;">No tasks</div>`;
   }
 
   // 2. TRACKER LABEL LINE SECTIONS
@@ -3495,28 +3493,22 @@ function renderNotes() {
 
     const allUniqueLabels = getUniqueLabels();
 
-    /* FIXED ANCHOR: EXECUTE NOW */
+   /* CONDITIONAL SECTION: PINNED NOTES */
     const pinned = fl.filter(n => n.pinned);
     const regular = fl.filter(n => !n.pinned);
 
-    const pinnedCollapsed = timelineCollapsedState.pinned;
-    const pinnedArrow = pinnedCollapsed ? '▶' : '▼';
-    const pinnedTitle = document.createElement('div');
-    pinnedTitle.className = "section-title execute-now-section-title";
-    pinnedTitle.setAttribute('onclick', "toggleTimelineSectionCollapse('pinned')");
-    pinnedTitle.innerHTML = `<span>⚡ EXECUTE NOW <span style="font-size: 9px; margin-left: 2px;">${pinnedArrow}</span></span> <span>(${pinned.length})</span>`;
-    workspaceTarget.appendChild(pinnedTitle);
-
     if (pinned.length > 0) {
+      const pinnedCollapsed = timelineCollapsedState.pinned;
+      const pinnedArrow = pinnedCollapsed ? '▶' : '▼';
+      const pinnedTitle = document.createElement('div');
+      pinnedTitle.className = "section-title execute-now-section-title";
+      pinnedTitle.setAttribute('onclick', "toggleTimelineSectionCollapse('pinned')");
+      pinnedTitle.innerHTML = `<span>📌 PINNED NOTES <span style="font-size: 9px; margin-left: 2px;">${pinnedArrow}</span></span> <span>(${pinned.length})</span>`;
+      workspaceTarget.appendChild(pinnedTitle);
+
       pinned.sort(sortByDateThenCreated);
       const pinnedGrid = renderSectionMasonryGrid(pinned, colsCount, allUniqueLabels, pinnedCollapsed);
       workspaceTarget.appendChild(pinnedGrid);
-    } else {
-      const emptyNotice = document.createElement('div');
-      emptyNotice.className = pinnedCollapsed ? 'notes-container collapsed' : 'notes-container';
-      emptyNotice.style.cssText = "font-size:12px; color:#80868b; font-style:italic; padding:2px 0 8px 12px;";
-      emptyNotice.innerText = "No tasks";
-      workspaceTarget.appendChild(emptyNotice);
     }
 
     if (isTimelineMode) {
