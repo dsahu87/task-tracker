@@ -66,7 +66,6 @@ let activeHabitInputContext = null;
 const timelineCollapsedState = {
   pinned: true,
   OVERDUE: true,
-  HARD_DEADLINE: true,
   SOFT_DEADLINE: true,
   NO_DATE: true
 };
@@ -2291,7 +2290,6 @@ function renderInCardChecklistUI(noteId, focusIndex = -1) {
                placeholder="List item"
                oninput="handleInCardItemTextChange(${index}, this.value)"
                onkeydown="handleInCardItemKeydown(event, '${noteId}', ${index})">
-        <button class="pop-out-note-btn" title="Convert to Independent Note" onclick="convertChecklistItemToNewNote(event, '${noteId}', ${index})">⏏️</button>
         <button class="editor-item-del-btn" title="Remove item" onclick="handleInCardDeleteLine('${noteId}', ${index})">✕</button>
       </div>
     `;
@@ -3070,8 +3068,6 @@ function createInlineCreatorDOM() {
             <div class="popover-scroll-body" id="inline-c-label-scroll"></div>
           </div>
         </div>
-
-        <button class="strict-toggle-btn-ui ${inlineCreatorStrictState ? 'active' : ''}" style="height:24px; width:24px; padding:2px; font-size:11px;" id="inline-c-strict-btn" onclick="toggleInlineCreatorStrict(event)" title="Mark as hard deadline">🚨</button>
         <input type="date" id="inline-c-date" class="date-input" style="height:24px; font-size:10px; max-width:105px;">
       </div>
 
@@ -3149,7 +3145,7 @@ function createNoteCardDOM(note, allUniqueLabels, cardIndex = 0) {
   card.id = `note-card-${note.id}`;
 
   if (isEditingThisCard) {
-    card.className = `note-card in-card-editing-mode ${inCardPinnedState ? 'execute-now-card' : ''} ${inCardStrictState ? 'strict-deadline-accent' : ''}`;
+    card.className = `note-card in-card-editing-mode ${inCardPinnedState ? 'execute-now-card' : ''}`;
     card.style.backgroundColor = getUniqueCardColor(note, cardIndex);
 
     const rawText = note.text || '';
@@ -3206,11 +3202,11 @@ function createNoteCardDOM(note, allUniqueLabels, cardIndex = 0) {
   }
 
   // Read Card
-  card.className = `note-card ${note.pinned ? 'execute-now-card' : ''} ${note.isStrict ? 'strict-deadline-accent' : ''}`; 
+  card.className = `note-card ${note.pinned ? 'execute-now-card' : ''}`; 
   card.style.backgroundColor = getUniqueCardColor(note, cardIndex);
   card.setAttribute('onclick', `startInCardEditing(event, '${note.id}')`);
   
-  let isPast = false;
+ let isPast = false;
   let dateDisplaySummary = "(set date)";
   let dateColorModifiersClass = "no-date";
   let deadlineCountdownBadgeHTML = "";
@@ -3232,18 +3228,12 @@ function createNoteCardDOM(note, allUniqueLabels, cardIndex = 0) {
       } else if (diffDays === 1) {
         deadlineCountdownBadgeHTML = `<div class="deadline-countdown-badge">⏳ Due Tomorrow</div>`;
       } else {
-        if (note.isStrict) {
-          deadlineCountdownBadgeHTML = `<div class="deadline-countdown-badge safe">⏳ ${diffDays} Days Left</div>`;
-        } else {
-          deadlineCountdownBadgeHTML = `<div class="deadline-countdown-badge soft-safe">⏳ ${diffDays} Days Left</div>`;
-        }
+        deadlineCountdownBadgeHTML = `<div class="deadline-countdown-badge soft-safe">⏳ ${diffDays} Days Left</div>`;
       }
 
       dateDisplaySummary = `${dTarget.getDate()} ${dTarget.toLocaleDateString('en-US', { month: 'short' })}, ${dTarget.toLocaleDateString('en-US', { weekday: 'short' })}`;
       dateColorModifiersClass = isPast ? "past-due" : "";
     }
-  } else if (note.isStrict) {
-    deadlineCountdownBadgeHTML = `<div class="deadline-countdown-badge">🚨 Hard Deadline</div>`;
   }
 
   const elapsedDays = calculateElapsedDays(note.createdAt);
@@ -3518,7 +3508,6 @@ function renderNotes() {
     if (isTimelineMode) {
       // --- MODE 1: TIMELINE VIEW ---
       const overdueItems = [];
-      const hardDeadlineItems = [];
       const softDeadlineItems = [];
       const noDateItems = [];
 
@@ -3539,8 +3528,6 @@ function renderNotes() {
 
         if (isOverdue) {
           overdueItems.push(n);
-        } else if (n.isStrict) {
-          hardDeadlineItems.push(n);
         } else if (n.dueDate) {
           softDeadlineItems.push(n);
         } else {
@@ -3570,29 +3557,7 @@ function renderNotes() {
         workspaceTarget.appendChild(emptyNotice);
       }
 
-      // HARD DEADLINE
-      hardDeadlineItems.sort(sortByDateThenCreated);
-      const isHardDeadlineCollapsed = timelineCollapsedState.HARD_DEADLINE;
-      const hardArrow = isHardDeadlineCollapsed ? '▶' : '▼';
-
-      const hardSecTitle = document.createElement('div');
-      hardSecTitle.className = "section-title hard-deadline-section-title";
-      hardSecTitle.setAttribute('onclick', "toggleTimelineSectionCollapse('HARD_DEADLINE')");
-      hardSecTitle.innerHTML = `<span>🚨 HARD DEADLINE <span style="font-size: 9px; margin-left: 2px;">${hardArrow}</span></span> <span>(${hardDeadlineItems.length})</span>`;
-      workspaceTarget.appendChild(hardSecTitle);
-
-      if (hardDeadlineItems.length > 0) {
-        const gridEl = renderSectionMasonryGrid(hardDeadlineItems, colsCount, allUniqueLabels, isHardDeadlineCollapsed);
-        workspaceTarget.appendChild(gridEl);
-      } else {
-        const emptyNotice = document.createElement('div');
-        emptyNotice.className = isHardDeadlineCollapsed ? 'notes-container collapsed' : 'notes-container';
-        emptyNotice.style.cssText = "font-size:12px; color:#80868b; font-style:italic; padding:4px 0 12px 4px;";
-        emptyNotice.innerText = "No tasks";
-        workspaceTarget.appendChild(emptyNotice);
-      }
-
-      // SOFT DEADLINE
+      // UPCOMING / SCHEDULED DEADLINES
       softDeadlineItems.sort(sortByDateThenCreated);
       const isSoftDeadlineCollapsed = timelineCollapsedState.SOFT_DEADLINE;
       const softArrow = isSoftDeadlineCollapsed ? '▶' : '▼';
@@ -3600,7 +3565,7 @@ function renderNotes() {
       const softSecTitle = document.createElement('div');
       softSecTitle.className = "section-title soft-deadline-section-title";
       softSecTitle.setAttribute('onclick', "toggleTimelineSectionCollapse('SOFT_DEADLINE')");
-      softSecTitle.innerHTML = `<span>⏰ SOFT DEADLINE <span style="font-size: 9px; margin-left: 2px;">${softArrow}</span></span> <span>(${softDeadlineItems.length})</span>`;
+      softSecTitle.innerHTML = `<span>⏰ UPCOMING DEADLINES <span style="font-size: 9px; margin-left: 2px;">${softArrow}</span></span> <span>(${softDeadlineItems.length})</span>`;
       workspaceTarget.appendChild(softSecTitle);
 
       if (softDeadlineItems.length > 0) {
