@@ -705,6 +705,15 @@ window.convertChecklistItemToNewNote = async function(event, parentNoteId, lineI
 };
 
 /* MOVE NOTE INTO ANOTHER NOTE AS ITEM */
+const moveModalCollapsedState = {};
+
+window.toggleMoveModalSection = function(event, sectionKey) {
+  if (event) event.stopPropagation();
+  const isCurrentlyCollapsed = moveModalCollapsedState[sectionKey] !== false;
+  moveModalCollapsedState[sectionKey] = !isCurrentlyCollapsed;
+  renderMoveModalList(document.getElementById('move-modal-search-input')?.value || '');
+};
+
 window.openMoveNoteTargetPicker = function(event, sourceNoteId) {
   if (event) event.stopPropagation();
   notePendingMoveTargetId = sourceNoteId;
@@ -717,32 +726,142 @@ window.openMoveNoteTargetPicker = function(event, sourceNoteId) {
 
   const modal = document.getElementById('move-target-modal');
   const titleEl = document.getElementById('move-modal-source-title');
-  const listEl = document.getElementById('move-modal-list');
 
-  titleEl.innerText = `Move: "${sourceNote.title || 'Untitled'}"`;
+  titleEl.innerHTML = `
+    <div style="margin-bottom:6px;">Move: "${sourceNote.title || 'Untitled'}"</div>
+    <input type="text" id="move-modal-search-input" placeholder="🔍 Filter target notes or labels..." 
+           style="width:100%; padding:5px 8px; border:1px solid #dadce0; border-radius:4px; font-size:12px; background:#fff; outline:none;"
+           oninput="renderMoveModalList(this.value)">
+  `;
+
+  renderMoveModalList('');
+  modal.style.display = 'flex';
+  setTimeout(() => {
+    const searchEl = document.getElementById('move-modal-search-input');
+    if (searchEl) searchEl.focus();
+  }, 20);
+};
+
+window.renderMoveModalList = function(searchTerm = '') {
+  const listEl = document.getElementById('move-modal-list');
+  if (!listEl || !notePendingMoveTargetId) return;
+
+  const query = searchTerm.trim().toLowerCase();
   listEl.innerHTML = '';
 
-  const candidates = notes.filter(n => n.id !== sourceNoteId);
+  const candidates = notes.filter(n => n.id !== notePendingMoveTargetId);
   if (candidates.length === 0) {
     listEl.innerHTML = `<div style="font-size:12px; color:#5f6368; padding:8px;">No other notes available to merge into.</div>`;
-  } else {
-    candidates.forEach(c => {
-      const item = document.createElement('div');
-      item.className = 'move-target-item';
-      item.onclick = () => executeMoveNoteToTarget(sourceNoteId, c.id);
-      
-      let dateStr = c.dueDate ? `📅 ${c.dueDate}` : 'No date';
-      let countLines = parseTextToLines(c.text).length;
-
-      item.innerHTML = `
-        <div class="move-target-item-title">${c.title || 'Untitled'}</div>
-        <div class="move-target-item-sub">${dateStr} • ${countLines} items/details</div>
-      `;
-      listEl.appendChild(item);
-    });
+    return;
   }
 
-  modal.style.display = 'flex';
+  const sortCandidates = (arr) => {
+    return [...arr].sort((a, b) => {
+      if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
+      if (!a.dueDate && b.dueDate) return 1;
+      if (a.dueDate && !b.dueDate) return -1;
+      if (a.dueDate && b.dueDate && a.dueDate !== b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+      return (b.createdAt || 0) - (a.createdAt || 0);
+    });
+  };
+
+  const buildTargetItemDOM = (c) => {
+    const item = document.createElement('div');
+    item.className = 'move-target-item';
+    item.style.marginLeft = '8px';
+    item.onclick = () => executeMoveNoteToTarget(notePendingMoveTargetId, c.id);
+
+    const dateStr = c.dueDate ? `📅 ${c.dueDate}` : 'No date';
+    const countLines = parseTextToLines(c.text).length;
+    const pinPrefix = c.pinned ? '📌 ' : '';
+
+    item.innerHTML = `
+      <div class="move-target-item-title">${pinPrefix}${c.title || 'Untitled'}</div>
+      <div class="move-target-item-sub">${dateStr} • ${countLines} items/details</div>
+    `;
+    return item;
+  };
+
+  const renderSection = (sectionKey, titleHTML, headerClass, sectionNotes) => {
+    const filteredNotes = query
+      ? sectionNotes.filter(n =>
+          (n.title || '').toLowerCase().includes(query) ||
+          (n.labels || []).some(l => l.toLowerCase().includes(query))
+        )
+      : sectionNotes;
+
+    if (filteredNotes.length === 0) return false;
+
+    const isCollapsed = query ? false : (moveModalCollapsedState[sectionKey] !== false);
+    const arrow = isCollapsed ? '▶' : '▼';
+
+    const header = document.createElement('div');
+    header.className = `section-title ${headerClass}`;
+    header.style.margin = '8px 0 4px 0';
+    header.onclick = (e) => toggleMoveModalSection(e, sectionKey);
+    header.innerHTML = `
+      <span>${titleHTML} <span style="font-size: 9px; margin-left: 2px;">${arrow}</span></span>
+      <span>(${filteredNotes.length})</span>
+    `;
+    listEl.appendChild(header);
+
+    if (!isCollapsed) {
+      const itemsWrapper = document.createElement('div');
+      itemsWrapper.style.cssText = 'display:flex; flex-direction:column; gap:5px; margin-bottom:6px;';
+      sortCandidates(filteredNotes).forEach(n => {
+        itemsWrapper.appendChild(buildTargetItemDOM(n));
+      });
+      listEl.appendChild(itemsWrapper);
+    }
+    return true;
+  };
+
+  let renderedAny = false;
+
+  // 1. Pinned Notes Section (only if pinned candidates exist)
+  const pinnedCandidates = candidates.filter(n => n.pinned);
+  if (pinnedCandidates.length > 0) {
+    if (renderSection('__PINNED__', '📌 PINNED NOTES', 'execute-now-section-title', pinnedCandidates)) {
+      renderedAny = true;
+    }
+  }
+
+  // 2. Pinned Labels followed by Unpinned Labels
+  const pinnedRegistry = Array.isArray(pinnedLabelsRegistry) ? pinnedLabelsRegistry : [];
+  const candidateLabels = new Set();
+  candidates.forEach(n => {
+    if (n.labels) n.labels.forEach(l => candidateLabels.add(l));
+  });
+
+  const allLabels = Array.from(candidateLabels);
+  const pinnedLabels = allLabels.filter(l => pinnedRegistry.includes(l)).sort((a, b) => a.localeCompare(b));
+  const unpinnedLabels = allLabels.filter(l => !pinnedRegistry.includes(l)).sort((a, b) => a.localeCompare(b));
+
+  pinnedLabels.forEach(lbl => {
+    const matching = candidates.filter(n => n.labels && n.labels.includes(lbl));
+    if (renderSection(`LBL_${lbl}`, `📌 🏷️ ${lbl}`, 'label-pinned-section-title', matching)) {
+      renderedAny = true;
+    }
+  });
+
+  unpinnedLabels.forEach(lbl => {
+    const matching = candidates.filter(n => n.labels && n.labels.includes(lbl));
+    if (renderSection(`LBL_${lbl}`, `🏷️ ${lbl}`, 'macro-section-title', matching)) {
+      renderedAny = true;
+    }
+  });
+
+  // 3. No Label Notes
+  const noLabelCandidates = candidates.filter(n => !n.labels || n.labels.length === 0);
+  if (noLabelCandidates.length > 0) {
+    if (renderSection('__NO_LABEL__', '⚪ NO LABEL', 'macro-section-title', noLabelCandidates)) {
+      renderedAny = true;
+    }
+  }
+
+  if (!renderedAny) {
+    listEl.innerHTML = `<div style="font-size:12px; color:#5f6368; padding:8px; font-style:italic;">No matching target notes found.</div>`;
+  }
 };
 
 window.closeMoveTargetModal = function() {
@@ -2666,15 +2785,17 @@ function bindKeepCheckboxInputInterceptor(textareaElement) {
 
 window.toggleCardDatePopoverDirect = function(e, id) { 
   e.stopPropagation(); 
-  document.querySelectorAll('.checkbox-dropdown-menu').forEach(m => m.classList.remove('show')); 
-  document.querySelectorAll('.custom-date-popover-menu').forEach(m => { if(m.id !== 'read-card-date-menu-' + id) m.classList.remove('show'); }); 
-  document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.remove('show'));
-  document.querySelectorAll('.note-card').forEach(c => { if(c.id !== 'note-card-' + id) c.classList.remove('menu-open'); });
+  const trigger = e.currentTarget;
+  const dateMenu = trigger ? trigger.nextElementSibling : document.getElementById('read-card-date-menu-' + id);
+  const card = trigger ? trigger.closest('.note-card') : document.getElementById('note-card-' + id);
 
-  const dateMenu = document.getElementById('read-card-date-menu-' + id);
-  if(dateMenu) {
+  document.querySelectorAll('.checkbox-dropdown-menu').forEach(m => m.classList.remove('show')); 
+  document.querySelectorAll('.custom-date-popover-menu').forEach(m => { if (m !== dateMenu) m.classList.remove('show'); }); 
+  document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.remove('show'));
+  document.querySelectorAll('.note-card').forEach(c => { if (c !== card) c.classList.remove('menu-open'); });
+
+  if (dateMenu) {
     const isShowing = dateMenu.classList.toggle('show'); 
-    const card = document.getElementById('note-card-' + id);
     if (card) {
       if (isShowing) card.classList.add('menu-open');
       else card.classList.remove('menu-open');
@@ -2684,14 +2805,17 @@ window.toggleCardDatePopoverDirect = function(e, id) {
 
 window.toggleCardCheckboxMenuDirect = function(e, id) { 
   e.stopPropagation(); 
-  document.querySelectorAll('.custom-date-popover-menu').forEach(m => m.classList.remove('show')); 
-  document.querySelectorAll('.checkbox-dropdown-menu').forEach(m => { if(m.id !== 'read-card-checkbox-menu-popover-' + id) m.classList.remove('show'); }); 
-  document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.remove('show'));
-  document.querySelectorAll('.note-card').forEach(c => { if(c.id !== 'note-card-' + id) c.classList.remove('menu-open'); });
+  const trigger = e.currentTarget;
+  const wrapper = trigger ? trigger.parentElement.parentElement : null;
+  const menu = wrapper ? wrapper.querySelector('.checkbox-dropdown-menu') : document.getElementById('read-card-checkbox-menu-popover-' + id);
+  const card = trigger ? trigger.closest('.note-card') : document.getElementById('note-card-' + id);
 
-  const menu = document.getElementById('read-card-checkbox-menu-popover-' + id);
+  document.querySelectorAll('.custom-date-popover-menu').forEach(m => m.classList.remove('show')); 
+  document.querySelectorAll('.checkbox-dropdown-menu').forEach(m => { if (m !== menu) m.classList.remove('show'); }); 
+  document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.remove('show'));
+  document.querySelectorAll('.note-card').forEach(c => { if (c !== card) c.classList.remove('menu-open'); });
+
   const isShowing = menu ? menu.classList.toggle('show') : false; 
-  const card = document.getElementById('note-card-' + id);
   if (card) {
     if (isShowing) card.classList.add('menu-open');
     else card.classList.remove('menu-open');
@@ -2700,7 +2824,7 @@ window.toggleCardCheckboxMenuDirect = function(e, id) {
   if (isShowing) {
     setTimeout(() => {
       const sb = menu.querySelector('.popover-scroll-body');
-      if(sb) sb.scrollTop = 0;
+      if (sb) sb.scrollTop = 0;
     }, 10);
   }
 };
@@ -2770,15 +2894,17 @@ window.setLabelFilter = function(lbl) {
 
 window.toggleDropdown = function(e, id) { 
   e.stopPropagation(); 
-  document.querySelectorAll('.dropdown-menu').forEach(m => { if(m.id !== 'menu-' + id) m.classList.remove('show'); }); 
+  const btn = e.currentTarget;
+  const menu = btn ? btn.nextElementSibling : document.getElementById('menu-' + id);
+  const card = btn ? btn.closest('.note-card') : document.getElementById('note-card-' + id);
+
+  document.querySelectorAll('.dropdown-menu').forEach(m => { if (m !== menu) m.classList.remove('show'); }); 
   document.querySelectorAll('.custom-date-popover-menu').forEach(m => m.classList.remove('show'));
   document.querySelectorAll('.checkbox-dropdown-menu').forEach(m => m.classList.remove('show'));
-  document.querySelectorAll('.note-card').forEach(c => { if(c.id !== 'note-card-' + id) c.classList.remove('menu-open'); }); 
+  document.querySelectorAll('.note-card').forEach(c => { if (c !== card) c.classList.remove('menu-open'); }); 
   
-  const menu = document.getElementById('menu-' + id);
-  if(menu) {
+  if (menu) {
     const isShowing = menu.classList.toggle('show'); 
-    const card = document.getElementById('note-card-' + id);
     if (card) {
       if (isShowing) card.classList.add('menu-open');
       else card.classList.remove('menu-open');
