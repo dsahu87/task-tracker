@@ -469,16 +469,10 @@ function updateHeaderViewModeButtons() {
   const trkBtn = document.getElementById('header-tracker-btn');
 
   if (notesModeBtn) {
-    const isNotesView = (currentWorkspaceViewMode === 'TIMELINE' || currentWorkspaceViewMode === 'LABELLINE');
+    const isNotesView = (currentWorkspaceViewMode !== 'TRACKER');
     notesModeBtn.classList.toggle('active-mode', isNotesView);
-
-    if (currentWorkspaceViewMode === 'TIMELINE') {
-      notesModeBtn.innerHTML = `<span class="header-btn-icon">📅</span>`;
-      notesModeBtn.title = "Current: Timeline View (Click to switch to Label Line View)";
-    } else {
-      notesModeBtn.innerHTML = `<span class="header-btn-icon">🏷️</span>`;
-      notesModeBtn.title = "Current: Label Line View (Click to switch to Timeline View)";
-    }
+    notesModeBtn.innerHTML = `<span class="header-btn-icon">🏷️</span>`;
+    notesModeBtn.title = "Notes Workspace";
   }
 
   if (trkBtn) {
@@ -502,22 +496,7 @@ window.toggleWorkspaceLayoutView = function() {
 };
 
 window.toggleAllSectionsUnified = function() {
-  if (currentWorkspaceViewMode === 'TIMELINE') {
-    const sectionKeys = Object.keys(timelineCollapsedState);
-    const hasAnyCollapsed = sectionKeys.some(key => timelineCollapsedState[key] === true);
-    const targetState = !hasAnyCollapsed; 
-    sectionKeys.forEach(key => {
-      timelineCollapsedState[key] = targetState;
-    });
-  } else if (currentWorkspaceViewMode === 'LABELLINE') {
-    const sectionKeys = Object.keys(labelLineCollapsedState);
-    const hasAnyCollapsed = sectionKeys.some(key => labelLineCollapsedState[key] === true);
-    const targetState = !hasAnyCollapsed;
-    sectionKeys.forEach(key => {
-      labelLineCollapsedState[key] = targetState;
-    });
-    timelineCollapsedState.pinned = targetState;
-  } else if (currentWorkspaceViewMode === 'TRACKER') {
+  if (currentWorkspaceViewMode === 'TRACKER') {
     const allTrackerLabels = Array.from(getUniqueTrackerLabels());
     allTrackerLabels.forEach(l => {
       if (trackerLabelLineCollapsedState[l] === undefined) trackerLabelLineCollapsedState[l] = true;
@@ -534,6 +513,24 @@ window.toggleAllSectionsUnified = function() {
     renderHabitsDashboard();
     return;
   }
+
+  // Unified Notes View (Timeline + Label Line combined)
+  Array.from(getUniqueLabels()).forEach(l => {
+    if (labelLineCollapsedState[l] === undefined) labelLineCollapsedState[l] = true;
+  });
+  if (labelLineCollapsedState['__NO_LABEL__'] === undefined) {
+    labelLineCollapsedState['__NO_LABEL__'] = true;
+  }
+
+  const timelineKeys = Object.keys(timelineCollapsedState);
+  const labelKeys = Object.keys(labelLineCollapsedState);
+  const hasAnyCollapsed =
+    timelineKeys.some(k => timelineCollapsedState[k] === true) ||
+    labelKeys.some(k => labelLineCollapsedState[k] === true);
+  const targetState = !hasAnyCollapsed;
+
+  timelineKeys.forEach(k => { timelineCollapsedState[k] = targetState; });
+  labelKeys.forEach(k => { labelLineCollapsedState[k] = targetState; });
   renderNotes();
 };
 
@@ -3573,9 +3570,7 @@ function renderNotes() {
   workspaceTarget.innerHTML = '';
   
   try {
-    const isLabelLine = (currentWorkspaceViewMode === 'LABELLINE');
     const isTrackerMode = (currentWorkspaceViewMode === 'TRACKER');
-    const isTimelineMode = (currentWorkspaceViewMode === 'TIMELINE');
 
     if (isTrackerMode) {
       workspaceTarget.appendChild(createInlineTrackerCreatorDOM());
@@ -3587,7 +3582,7 @@ function renderNotes() {
       return;
     }
 
-    // Inline Note Creator for Notes views
+    // Inline Note Creator for Unified Notes View
     workspaceTarget.appendChild(createInlineCreatorDOM());
 
     let fl = notes;
@@ -3613,7 +3608,7 @@ function renderNotes() {
 
     const allUniqueLabels = getUniqueLabels();
 
-    /* CONDITIONAL SECTION: PINNED NOTES */
+    /* 1. CONDITIONAL TOP ANCHOR: PINNED NOTES */
     const pinned = fl.filter(n => n.pinned);
     const regular = fl;
 
@@ -3631,37 +3626,37 @@ function renderNotes() {
       workspaceTarget.appendChild(pinnedGrid);
     }
 
-    if (isTimelineMode) {
-      // --- MODE 1: TIMELINE VIEW ---
-      const overdueItems = [];
-      const softDeadlineItems = [];
-      const noDateItems = [];
+    /* Categorize Timeline Buckets */
+    const overdueItems = [];
+    const softDeadlineItems = [];
+    const noDateItems = [];
 
-      regular.forEach(n => {
-        let isOverdue = false;
-        if (n.dueDate) {
-          const parts = n.dueDate.split('-');
-          if (parts.length === 3) {
-            const target = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-            target.setHours(0, 0, 0, 0);
-            const now = new Date();
-            now.setHours(0, 0, 0, 0);
-            if (Math.round((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) < 0) {
-              isOverdue = true;
-            }
+    regular.forEach(n => {
+      let isOverdue = false;
+      if (n.dueDate) {
+        const parts = n.dueDate.split('-');
+        if (parts.length === 3) {
+          const target = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+          target.setHours(0, 0, 0, 0);
+          const now = new Date();
+          now.setHours(0, 0, 0, 0);
+          if (Math.round((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) < 0) {
+            isOverdue = true;
           }
         }
+      }
 
-        if (isOverdue) {
-          overdueItems.push(n);
-        } else if (n.dueDate) {
-          softDeadlineItems.push(n);
-        } else {
-          noDateItems.push(n);
-        }
-      });
+      if (isOverdue) {
+        overdueItems.push(n);
+      } else if (n.dueDate) {
+        softDeadlineItems.push(n);
+      } else {
+        noDateItems.push(n);
+      }
+    });
 
-      // OVERDUE
+    /* 2. CONDITIONAL TOP SECTION: OVERDUE ITEMS */
+    if (overdueItems.length > 0) {
       overdueItems.sort(sortByDateThenCreated);
       const isOverdueCollapsed = timelineCollapsedState.OVERDUE;
       const overdueArrow = isOverdueCollapsed ? '▶' : '▼';
@@ -3672,143 +3667,120 @@ function renderNotes() {
       overdueSecTitle.innerHTML = `<span>🚨 OVERDUE ITEMS <span style="font-size: 9px; margin-left: 2px;">${overdueArrow}</span></span> <span>(${overdueItems.length})</span>`;
       workspaceTarget.appendChild(overdueSecTitle);
 
-      if (overdueItems.length > 0) {
-        const gridEl = renderSectionMasonryGrid(overdueItems, colsCount, allUniqueLabels, isOverdueCollapsed);
-        workspaceTarget.appendChild(gridEl);
-      } else {
-        const emptyNotice = document.createElement('div');
-        emptyNotice.className = isOverdueCollapsed ? 'notes-container collapsed' : 'notes-container';
-        emptyNotice.style.cssText = "font-size:12px; color:#80868b; font-style:italic; padding:4px 0 12px 4px;";
-        emptyNotice.innerText = "No tasks";
-        workspaceTarget.appendChild(emptyNotice);
-      }
+      workspaceTarget.appendChild(renderSectionMasonryGrid(overdueItems, colsCount, allUniqueLabels, isOverdueCollapsed));
+    }
 
-      // UPCOMING / SCHEDULED DEADLINES
-      softDeadlineItems.sort(sortByDateThenCreated);
-      const isSoftDeadlineCollapsed = timelineCollapsedState.SOFT_DEADLINE;
-      const softArrow = isSoftDeadlineCollapsed ? '▶' : '▼';
+    /* 3. FIXED TOP SECTION: UPCOMING DEADLINES */
+    softDeadlineItems.sort(sortByDateThenCreated);
+    const isSoftDeadlineCollapsed = timelineCollapsedState.SOFT_DEADLINE;
+    const softArrow = isSoftDeadlineCollapsed ? '▶' : '▼';
 
-      const softSecTitle = document.createElement('div');
-      softSecTitle.className = "section-title soft-deadline-section-title";
-      softSecTitle.setAttribute('onclick', "toggleTimelineSectionCollapse('SOFT_DEADLINE')");
-      softSecTitle.innerHTML = `<span>⏰ UPCOMING DEADLINES <span style="font-size: 9px; margin-left: 2px;">${softArrow}</span></span> <span>(${softDeadlineItems.length})</span>`;
-      workspaceTarget.appendChild(softSecTitle);
+    const softSecTitle = document.createElement('div');
+    softSecTitle.className = "section-title soft-deadline-section-title";
+    softSecTitle.setAttribute('onclick', "toggleTimelineSectionCollapse('SOFT_DEADLINE')");
+    softSecTitle.innerHTML = `<span>⏰ UPCOMING DEADLINES <span style="font-size: 9px; margin-left: 2px;">${softArrow}</span></span> <span>(${softDeadlineItems.length})</span>`;
+    workspaceTarget.appendChild(softSecTitle);
 
-      if (softDeadlineItems.length > 0) {
-        const gridEl = renderSectionMasonryGrid(softDeadlineItems, colsCount, allUniqueLabels, isSoftDeadlineCollapsed);
-        workspaceTarget.appendChild(gridEl);
-      } else {
-        const emptyNotice = document.createElement('div');
-        emptyNotice.className = isSoftDeadlineCollapsed ? 'notes-container collapsed' : 'notes-container';
-        emptyNotice.style.cssText = "font-size:12px; color:#80868b; font-style:italic; padding:4px 0 12px 4px;";
-        emptyNotice.innerText = "No tasks";
-        workspaceTarget.appendChild(emptyNotice);
-      }
-
-      // NO DATE
-      noDateItems.sort(sortByDateThenCreated);
-      const isNoDateCollapsed = timelineCollapsedState.NO_DATE;
-      const noDateArrow = isNoDateCollapsed ? '▶' : '▼';
-
-      const noDateSecTitle = document.createElement('div');
-      noDateSecTitle.className = "section-title macro-section-title";
-      noDateSecTitle.setAttribute('onclick', "toggleTimelineSectionCollapse('NO_DATE')");
-      noDateSecTitle.innerHTML = `<span>📥 NO DATE <span style="font-size: 9px; margin-left: 2px;">${noDateArrow}</span></span> <span>(${noDateItems.length})</span>`;
-      workspaceTarget.appendChild(noDateSecTitle);
-
-      if (noDateItems.length > 0) {
-        const gridEl = renderSectionMasonryGrid(noDateItems, colsCount, allUniqueLabels, isNoDateCollapsed);
-        workspaceTarget.appendChild(gridEl);
-      } else {
-        const emptyNotice = document.createElement('div');
-        emptyNotice.className = isNoDateCollapsed ? 'notes-container collapsed' : 'notes-container';
-        emptyNotice.style.cssText = "font-size:12px; color:#80868b; font-style:italic; padding:4px 0 12px 4px;";
-        emptyNotice.innerText = "No tasks";
-        workspaceTarget.appendChild(emptyNotice);
-      }
-
+    if (softDeadlineItems.length > 0) {
+      workspaceTarget.appendChild(renderSectionMasonryGrid(softDeadlineItems, colsCount, allUniqueLabels, isSoftDeadlineCollapsed));
     } else {
-      // --- MODE 2: LABEL LINE VIEW ---
-      const pinnedRegistry = Array.isArray(pinnedLabelsRegistry) ? pinnedLabelsRegistry : [];
-      const allLabelsList = Array.from(allUniqueLabels);
+      const emptyNotice = document.createElement('div');
+      emptyNotice.className = isSoftDeadlineCollapsed ? 'notes-container collapsed' : 'notes-container';
+      emptyNotice.style.cssText = "font-size:12px; color:#80868b; font-style:italic; padding:4px 0 12px 4px;";
+      emptyNotice.innerText = "No tasks";
+      workspaceTarget.appendChild(emptyNotice);
+    }
 
-      const pinnedLabels = allLabelsList.filter(l => pinnedRegistry.includes(l)).sort((a,b) => a.localeCompare(b));
-      const unpinnedLabels = allLabelsList.filter(l => !pinnedRegistry.includes(l)).sort((a,b) => a.localeCompare(b));
+    /* 4. MIDDLE DYNAMIC SECTIONS: PINNED LABELS -> OTHER LABELS -> NO LABEL */
+    const pinnedRegistry = Array.isArray(pinnedLabelsRegistry) ? pinnedLabelsRegistry : [];
+    const allLabelsList = Array.from(allUniqueLabels);
 
-      const noLabelNotes = regular.filter(n => !n.labels || n.labels.length === 0);
+    const pinnedLabels = allLabelsList.filter(l => pinnedRegistry.includes(l)).sort((a,b) => a.localeCompare(b));
+    const unpinnedLabels = allLabelsList.filter(l => !pinnedRegistry.includes(l)).sort((a,b) => a.localeCompare(b));
+    const noLabelNotes = regular.filter(n => !n.labels || n.labels.length === 0);
 
-      const renderSingleLabelLineSection = (labelName, isPinnedLabel, isNoLabel = false) => {
-        const labelKey = isNoLabel ? '__NO_LABEL__' : labelName;
-        if (labelLineCollapsedState[labelKey] === undefined) {
-          labelLineCollapsedState[labelKey] = true;
-        }
-        const isCollapsed = labelLineCollapsedState[labelKey];
-        const arrow = isCollapsed ? '▶' : '▼';
+    const renderSingleLabelLineSection = (labelName, isPinnedLabel, isNoLabel = false) => {
+      const labelKey = isNoLabel ? '__NO_LABEL__' : labelName;
+      if (labelLineCollapsedState[labelKey] === undefined) {
+        labelLineCollapsedState[labelKey] = true;
+      }
+      const isCollapsed = labelLineCollapsedState[labelKey];
+      const arrow = isCollapsed ? '▶' : '▼';
 
-        let matchingNotes = [];
-        if (isNoLabel) {
-          matchingNotes = noLabelNotes;
-        } else {
-          matchingNotes = regular.filter(n => n.labels && n.labels.includes(labelName));
-        }
-        matchingNotes.sort(sortByDateThenCreated);
+      let matchingNotes = isNoLabel
+        ? noLabelNotes
+        : regular.filter(n => n.labels && n.labels.includes(labelName));
+      matchingNotes.sort(sortByDateThenCreated);
 
-        const base64 = btoa(encodeURIComponent(labelName)).replace(/=/g, '');
+      const base64 = btoa(encodeURIComponent(labelName)).replace(/=/g, '');
 
-        const secTitle = document.createElement('div');
-        secTitle.className = `section-title ${isPinnedLabel ? 'label-pinned-section-title' : 'macro-section-title'}`;
-        secTitle.setAttribute('onclick', `toggleLabelLineSectionCollapse('${labelKey.replace(/'/g, "\\'")}')`);
+      const secTitle = document.createElement('div');
+      secTitle.className = `section-title ${isPinnedLabel ? 'label-pinned-section-title' : 'macro-section-title'}`;
+      secTitle.setAttribute('onclick', `toggleLabelLineSectionCollapse('${labelKey.replace(/'/g, "\\'")}')`);
 
-        let pinIconHTML = '';
-        let dotsMenuHTML = '';
+      let pinIconHTML = '';
+      let dotsMenuHTML = '';
 
-        if (!isNoLabel) {
-          pinIconHTML = `<span class="sidebar-pin-toggle" onclick="event.stopPropagation(); toggleLabelSidebarPin(event, '${labelName.replace(/'/g, "\\'")}')" title="${isPinnedLabel ? 'Unpin Label Priority' : 'Pin Label to Top Priority'}">${isPinnedLabel ? '📌' : '📍'}</span>`;
-          dotsMenuHTML = `
-            <span class="sidebar-dots-trigger" onclick="toggleSidebarChipPopover(event, 'hdr-${base64}')" title="Label Actions">⋮</span>
-            <div class="chip-popover-menu" id="chip-popover-hdr-${base64}" onclick="event.stopPropagation();">
-              <div class="popover-header-fixed">
-                <div class="popover-section-title">Edit Name</div>
-                <input type="text" class="chip-inline-input" value="${labelName}" onchange="editLabelNameGlobal('${labelName.replace(/'/g, "\\'")}', this.value)">
-              </div>
-              <button class="chip-popover-btn delete-action" onclick="deleteLabelGlobal('${labelName.replace(/'/g, "\\'")}');">🗑️ Delete Label</button>
+      if (!isNoLabel) {
+        pinIconHTML = `<span class="sidebar-pin-toggle" onclick="event.stopPropagation(); toggleLabelSidebarPin(event, '${labelName.replace(/'/g, "\\'")}')" title="${isPinnedLabel ? 'Unpin Label Priority' : 'Pin Label to Top Priority'}">${isPinnedLabel ? '📌' : '📍'}</span>`;
+        dotsMenuHTML = `
+          <span class="sidebar-dots-trigger" onclick="toggleSidebarChipPopover(event, 'hdr-${base64}')" title="Label Actions">⋮</span>
+          <div class="chip-popover-menu" id="chip-popover-hdr-${base64}" onclick="event.stopPropagation();">
+            <div class="popover-header-fixed">
+              <div class="popover-section-title">Edit Name</div>
+              <input type="text" class="chip-inline-input" value="${labelName}" onchange="editLabelNameGlobal('${labelName.replace(/'/g, "\\'")}', this.value)">
             </div>
-          `;
-        }
-
-        const labelTitleDisplay = isNoLabel ? `⚪ NO LABEL` : `🏷️ ${labelName}`;
-
-        secTitle.innerHTML = `
-          <div style="display:flex; align-items:center; gap:6px;">
-            ${pinIconHTML}
-            <span>${labelTitleDisplay} <span style="font-size: 9px; margin-left: 2px;">${arrow}</span></span>
+            <button class="chip-popover-btn delete-action" onclick="deleteLabelGlobal('${labelName.replace(/'/g, "\\'")}');">🗑️ Delete Label</button>
           </div>
-          <span>(${matchingNotes.length})</span>
-          ${dotsMenuHTML}
         `;
-        workspaceTarget.appendChild(secTitle);
+      }
 
-        if (matchingNotes.length > 0) {
-          const gridEl = renderSectionMasonryGrid(matchingNotes, colsCount, allUniqueLabels, isCollapsed);
-          workspaceTarget.appendChild(gridEl);
-        } else {
-          const emptyNotice = document.createElement('div');
-          emptyNotice.className = isCollapsed ? 'notes-container collapsed' : 'notes-container';
-          emptyNotice.style.cssText = "font-size:12px; color:#80868b; font-style:italic; padding:4px 0 12px 12px;";
-          emptyNotice.innerText = "No tasks";
-          workspaceTarget.appendChild(emptyNotice);
-        }
-      };
+      const labelTitleDisplay = isNoLabel ? `⚪ NO LABEL` : `🏷️ ${labelName}`;
 
-      pinnedLabels.forEach(lbl => {
-        renderSingleLabelLineSection(lbl, true, false);
-      });
+      secTitle.innerHTML = `
+        <div style="display:flex; align-items:center; gap:6px;">
+          ${pinIconHTML}
+          <span>${labelTitleDisplay} <span style="font-size: 9px; margin-left: 2px;">${arrow}</span></span>
+        </div>
+        <span>(${matchingNotes.length})</span>
+        ${dotsMenuHTML}
+      `;
+      workspaceTarget.appendChild(secTitle);
 
-      unpinnedLabels.forEach(lbl => {
-        renderSingleLabelLineSection(lbl, false, false);
-      });
+      if (matchingNotes.length > 0) {
+        workspaceTarget.appendChild(renderSectionMasonryGrid(matchingNotes, colsCount, allUniqueLabels, isCollapsed));
+      } else {
+        const emptyNotice = document.createElement('div');
+        emptyNotice.className = isCollapsed ? 'notes-container collapsed' : 'notes-container';
+        emptyNotice.style.cssText = "font-size:12px; color:#80868b; font-style:italic; padding:4px 0 12px 12px;";
+        emptyNotice.innerText = "No tasks";
+        workspaceTarget.appendChild(emptyNotice);
+      }
+    };
 
-      renderSingleLabelLineSection('No Label', false, true);
+    pinnedLabels.forEach(lbl => renderSingleLabelLineSection(lbl, true, false));
+    unpinnedLabels.forEach(lbl => renderSingleLabelLineSection(lbl, false, false));
+    renderSingleLabelLineSection('No Label', false, true);
+
+    /* 5. FIXED BOTTOM SECTION: NO DATE (Placed just after No Label) */
+    noDateItems.sort(sortByDateThenCreated);
+    const isNoDateCollapsed = timelineCollapsedState.NO_DATE;
+    const noDateArrow = isNoDateCollapsed ? '▶' : '▼';
+
+    const noDateSecTitle = document.createElement('div');
+    noDateSecTitle.className = "section-title macro-section-title";
+    noDateSecTitle.setAttribute('onclick', "toggleTimelineSectionCollapse('NO_DATE')");
+    noDateSecTitle.innerHTML = `<span>📥 NO DATE <span style="font-size: 9px; margin-left: 2px;">${noDateArrow}</span></span> <span>(${noDateItems.length})</span>`;
+    workspaceTarget.appendChild(noDateSecTitle);
+
+    if (noDateItems.length > 0) {
+      workspaceTarget.appendChild(renderSectionMasonryGrid(noDateItems, colsCount, allUniqueLabels, isNoDateCollapsed));
+    } else {
+      const emptyNotice = document.createElement('div');
+      emptyNotice.className = isNoDateCollapsed ? 'notes-container collapsed' : 'notes-container';
+      emptyNotice.style.cssText = "font-size:12px; color:#80868b; font-style:italic; padding:4px 0 12px 4px;";
+      emptyNotice.innerText = "No tasks";
+      workspaceTarget.appendChild(emptyNotice);
     }
 
   } catch(err) {
