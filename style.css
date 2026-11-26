@@ -151,17 +151,20 @@ body { background-color: #f1f3f4; color: #202124; padding: 10px; height: 100%; m
   box-shadow: 0 2px 8px rgba(217, 48, 37, 0.25) !important;
 }
 
-.tracker-card-top-row {
+.tracker-card-bottom-row {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 5px;
   width: 100%;
+  padding-top: 4px;
+  border-top: 1px dashed rgba(0, 0, 0, 0.08);
+  position: relative;
 }
-.tracker-card-top-actions {
+.tracker-card-bottom-actions {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   margin-left: auto;
   flex-shrink: 0;
 }

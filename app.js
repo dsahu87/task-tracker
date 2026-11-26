@@ -1973,47 +1973,10 @@ function renderHabitsDashboard() {
 
     let cardHTML = `
       <div class="tracker-task-card ${isPinnedCard ? 'execute-now-card' : ''}" style="background-color: ${cardBgColor};">
-        <!-- LINE 1: Pin, Label Picker, Label Chips, 2-Min Rule, History & Menu -->
-        <div class="tracker-card-top-row">
-          <span class="sidebar-pin-toggle" onclick="toggleHabitPin(event, '${h.id}')" title="${isPinned ? 'Unpin' : 'Pin to Pinned Trackers'}">${pinIcon}</span>
-          
-          <div style="position:relative; display:inline-flex;">
-            <button class="icon-picker-btn" onclick="toggleTrackerCardLabelMenu(event, '${h.id}')" title="Assign / Change Tracker Label" style="height:22px; min-width:24px; padding:0 4px; font-size:10px;">🏷️</button>
-            <div class="checkbox-dropdown-menu" id="tracker-card-menu-${h.id}" onclick="event.stopPropagation();">
-              <div class="popover-header-fixed">
-                <div class="popover-section-title">Label tracker task</div>
-                <div class="popover-input-wrapper">
-                  <input type="text" id="tracker-card-search-${h.id}" class="label-input" placeholder="Enter label name" oninput="handleTrackerCardLabelSearchInput('${h.id}', this.value)">
-                  <span class="search-icon">🔍</span>
-                </div>
-              </div>
-              <div class="popover-scroll-body"></div>
-            </div>
-          </div>
-
-          ${habitLabelChips}
-          ${minRuleBadgeHTML}
-
-          <div class="tracker-card-top-actions">
-            <button class="analytics-view-btn" onclick="openHabitAnalyticsMatrix(event, '${h.id}')" title="Review Long-term History">📊 History</button>
-            <span class="sidebar-dots-trigger" onclick="toggleSidebarChipPopover(event, '${h.id}')">⋮</span>
-          </div>
-          
-          <div class="chip-popover-menu" id="chip-popover-${h.id}" style="left:auto; right:8px;" onclick="event.stopPropagation();">
-            <div class="popover-header-fixed">
-              <div class="popover-section-title">Edit Name</div>
-              <input type="text" class="chip-inline-input" value="${safeName}" onchange="editHabitNameGlobal('${h.id}', this.value)">
-              <div class="popover-section-title">2-Min Fallback Rule</div>
-              <input type="text" class="chip-inline-input" placeholder="e.g. ⚡ 5 Pushups" value="${safeMinRule}" onchange="editHabitMinRuleGlobal('${h.id}', this.value)">
-            </div>
-            <button class="chip-popover-btn delete-action" onclick="deleteHabitGlobal('${h.id}');">🗑️ Delete Task</button>
-          </div>
-        </div>
-
-        <!-- LINE 2: Larger Readable Tracker Task Title -->
+        <!-- LINE 1: Tracker Task Title -->
         <div class="tracker-card-title">${h.name || 'Untitled'}</div>
-        
-        <!-- LINE 3: Full-Width Horizontal 7-Day Line -->
+
+        <!-- LINE 2: Horizontal 7-Day Weekdays Row -->
         <div class="habit-weekday-grid">
     `;
 
@@ -2047,6 +2010,42 @@ function renderHabitsDashboard() {
     });
 
     cardHTML += `
+        </div>
+
+        <!-- LINE 3 (Bottom): Pin/Unpin -> History -> Label -> 2-Min Rule -> 3-Dots -->
+        <div class="tracker-card-bottom-row">
+          <span class="sidebar-pin-toggle" style="margin-right:0;" onclick="toggleHabitPin(event, '${h.id}')" title="${isPinned ? 'Unpin' : 'Pin to Pinned Trackers'}">${pinIcon}</span>
+
+          <button class="analytics-view-btn" onclick="openHabitAnalyticsMatrix(event, '${h.id}')" title="Review Long-term History">📊 History</button>
+
+          <div style="position:relative; display:inline-flex;">
+            <button class="icon-picker-btn" onclick="toggleTrackerCardLabelMenu(event, '${h.id}')" title="Assign / Change Tracker Label" style="height:22px; min-width:24px; padding:0 4px; font-size:10px;">🏷️</button>
+            <div class="checkbox-dropdown-menu" id="tracker-card-menu-${h.id}" onclick="event.stopPropagation();">
+              <div class="popover-header-fixed">
+                <div class="popover-section-title">Label tracker task</div>
+                <div class="popover-input-wrapper">
+                  <input type="text" id="tracker-card-search-${h.id}" class="label-input" placeholder="Enter label name" oninput="handleTrackerCardLabelSearchInput('${h.id}', this.value)">
+                  <span class="search-icon">🔍</span>
+                </div>
+              </div>
+              <div class="popover-scroll-body"></div>
+            </div>
+          </div>
+
+          ${habitLabelChips}
+          ${minRuleBadgeHTML}
+
+          <span class="sidebar-dots-trigger" style="margin-left:auto;" onclick="toggleSidebarChipPopover(event, '${h.id}')">⋮</span>
+
+          <div class="chip-popover-menu" id="chip-popover-${h.id}" style="top:auto; bottom:28px; left:auto; right:0;" onclick="event.stopPropagation();">
+            <div class="popover-header-fixed">
+              <div class="popover-section-title">Edit Name</div>
+              <input type="text" class="chip-inline-input" value="${safeName}" onchange="editHabitNameGlobal('${h.id}', this.value)">
+              <div class="popover-section-title">2-Min Fallback Rule</div>
+              <input type="text" class="chip-inline-input" placeholder="e.g. ⚡ 5 Pushups" value="${safeMinRule}" onchange="editHabitMinRuleGlobal('${h.id}', this.value)">
+            </div>
+            <button class="chip-popover-btn delete-action" onclick="deleteHabitGlobal('${h.id}');">🗑️ Delete Task</button>
+          </div>
         </div>
       </div>
     `;
@@ -2618,8 +2617,11 @@ window.toggleLabelSidebarPin = async function(e, name) {
 
 window.toggleSidebarChipPopover = function(e, id) { 
   e.stopPropagation(); 
-  document.querySelectorAll('.chip-popover-menu').forEach(m => { if (m.id !== 'chip-popover-' + id) m.classList.remove('show'); }); 
-  const p = document.getElementById('chip-popover-' + id); 
+  const trigger = e.currentTarget;
+  const parentRow = trigger ? trigger.closest('.tracker-card-bottom-row, .section-title, .sidebar-item') : null;
+  const p = parentRow ? parentRow.querySelector('.chip-popover-menu') : document.getElementById('chip-popover-' + id);
+
+  document.querySelectorAll('.chip-popover-menu').forEach(m => { if (m !== p) m.classList.remove('show'); }); 
   if (p) p.classList.toggle('show'); 
 };
 
