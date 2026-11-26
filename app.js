@@ -1917,8 +1917,8 @@ window.closeMatrixModal = function() {
 
 function renderHabitsDashboard() {
   const targetPanel = document.getElementById('habits-dashboard-target');
-  if(!targetPanel) return;
-  
+  if (!targetPanel) return;
+
   const todayKey = ['Su', 'M', 'T', 'W', 'Th', 'F', 'Sa'][new Date().getDay()];
   const currentWeekKey = "W" + currentGlobalWeekNumber;
 
@@ -1934,7 +1934,7 @@ function renderHabitsDashboard() {
   const regularHabits = filteredHabits;
 
   const sortHabitsGroup = (habitList) => {
-    return [...habitList].sort((a,b) => {
+    return [...habitList].sort((a, b) => {
       const aPinned = pinnedRegistry.includes(a.id);
       const bPinned = pinnedRegistry.includes(b.id);
       if (aPinned !== bPinned) return aPinned ? -1 : 1;
@@ -1945,33 +1945,40 @@ function renderHabitsDashboard() {
     });
   };
 
+  let colsCount = isSingleColumnView ? 1 : 3;
+  if (!isSingleColumnView) {
+    if (window.innerWidth <= 1100) colsCount = 2;
+  }
+
   const daysOfWeek = ['M', 'T', 'W', 'Th', 'F', 'Sa', 'Su'];
 
-  const renderSingleHabitCard = (h, isExecuteNow) => {
+  const renderSingleHabitCard = (h, isPinnedCard, cardIndex = 0) => {
     const isPinned = pinnedRegistry.includes(h.id);
     const pinIcon = isPinned ? '📌' : '📍';
     const currentWeekHistory = (h.yearlyGrid && h.yearlyGrid[currentWeekKey]) ? h.yearlyGrid[currentWeekKey] : {};
     const hType = h.habitType || 'boolean';
-    const completedDays = calculateWeeklyCompletedCount(h.yearlyGrid, currentWeekKey);
-
-    let bgClass = "habit-card-red";
-    if (completedDays === 7) bgClass = "habit-card-green";
-    else if (completedDays >= 4 && completedDays <= 6) bgClass = "habit-card-blue";
-    else if (completedDays >= 1 && completedDays <= 3) bgClass = "habit-card-yellow";
+    const cardBgColor = getUniqueCardColor(h, cardIndex);
 
     let habitLabelsArray = h.labels || [];
-    let habitLabelChips = habitLabelsArray.map(l => `<span style="font-size:10px; color:#1a73e8; background:#e8f0fe; padding:1px 5px; border-radius:4px; border:1px solid #d2e3fc;">🏷️ ${l}</span>`).join('');
+    let habitLabelChips = habitLabelsArray
+      .map(l => `<span class="tracker-label-chip">🏷️ ${l}</span>`)
+      .join('');
 
     const safeName = (h.name || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     const safeMinRule = (h.minRuleText || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
+    const minRuleBadgeHTML = h.minRuleText
+      ? `<span class="habit-2min-badge" title="2-Min Fallback: ${safeMinRule}">⚡ 2-min: ${h.minRuleText}</span>`
+      : '';
+
     let cardHTML = `
-      <div class="sidebar-item ${isExecuteNow ? 'execute-now-item' : bgClass}" style="flex-direction: column; align-items: flex-start; gap: 4px; padding: 6px 8px; margin-bottom: 0; border: 1px solid #e0e0e0;">
-        <div style="display:flex; width:100%; align-items:center; gap:6px;">
-          <span class="sidebar-pin-toggle" onclick="toggleHabitPin(event, '${h.id}')" title="${isPinned ? 'Unpin' : 'Pin to Execute Now'}">${pinIcon}</span>
+      <div class="tracker-task-card ${isPinnedCard ? 'execute-now-card' : ''}" style="background-color: ${cardBgColor};">
+        <!-- LINE 1: Pin, Label Picker, Label Chips, 2-Min Rule, History & Menu -->
+        <div class="tracker-card-top-row">
+          <span class="sidebar-pin-toggle" onclick="toggleHabitPin(event, '${h.id}')" title="${isPinned ? 'Unpin' : 'Pin to Pinned Trackers'}">${pinIcon}</span>
           
           <div style="position:relative; display:inline-flex;">
-            <button class="icon-picker-btn" onclick="toggleTrackerCardLabelMenu(event, '${h.id}')" title="Assign / Change Tracker Label" style="height:22px; padding:0 4px; font-size:10px;">🏷️</button>
+            <button class="icon-picker-btn" onclick="toggleTrackerCardLabelMenu(event, '${h.id}')" title="Assign / Change Tracker Label" style="height:22px; min-width:24px; padding:0 4px; font-size:10px;">🏷️</button>
             <div class="checkbox-dropdown-menu" id="tracker-card-menu-${h.id}" onclick="event.stopPropagation();">
               <div class="popover-header-fixed">
                 <div class="popover-section-title">Label tracker task</div>
@@ -1985,10 +1992,14 @@ function renderHabitsDashboard() {
           </div>
 
           ${habitLabelChips}
-          <span style="font-weight:600; font-size:12px; flex-grow:1; word-break:break-all;">${h.name || ''}</span>
-          <span class="sidebar-dots-trigger" onclick="toggleSidebarChipPopover(event, '${h.id}')">⋮</span>
+          ${minRuleBadgeHTML}
+
+          <div class="tracker-card-top-actions">
+            <button class="analytics-view-btn" onclick="openHabitAnalyticsMatrix(event, '${h.id}')" title="Review Long-term History">📊 History</button>
+            <span class="sidebar-dots-trigger" onclick="toggleSidebarChipPopover(event, '${h.id}')">⋮</span>
+          </div>
           
-          <div class="chip-popover-menu" id="chip-popover-${h.id}" onclick="event.stopPropagation();">
+          <div class="chip-popover-menu" id="chip-popover-${h.id}" style="left:auto; right:8px;" onclick="event.stopPropagation();">
             <div class="popover-header-fixed">
               <div class="popover-section-title">Edit Name</div>
               <input type="text" class="chip-inline-input" value="${safeName}" onchange="editHabitNameGlobal('${h.id}', this.value)">
@@ -1998,11 +2009,12 @@ function renderHabitsDashboard() {
             <button class="chip-popover-btn delete-action" onclick="deleteHabitGlobal('${h.id}');">🗑️ Delete Task</button>
           </div>
         </div>
+
+        <!-- LINE 2: Larger Readable Tracker Task Title -->
+        <div class="tracker-card-title">${h.name || 'Untitled'}</div>
         
-        ${h.minRuleText ? `<div class="habit-2min-subtitle">⚡ 2-min: ${h.minRuleText}</div>` : ''}
-        
-        <div style="display: flex; gap: 6px; align-items: center; width: 100%; margin-top: 2px;">
-          <div class="habit-weekday-grid">
+        <!-- LINE 3: Full-Width Horizontal 7-Day Line -->
+        <div class="habit-weekday-grid">
     `;
 
     daysOfWeek.forEach(d => {
@@ -2035,19 +2047,31 @@ function renderHabitsDashboard() {
     });
 
     cardHTML += `
-          </div>
-          <button class="analytics-view-btn" onclick="openHabitAnalyticsMatrix(event, '${h.id}')" title="Review Long-term History">📊 History</button>
         </div>
       </div>
     `;
     return cardHTML;
   };
 
+  const renderTrackerCardsGrid = (habitList, isPinnedSection, isCollapsed) => {
+    const collapsedClass = isCollapsed ? 'collapsed' : '';
+    const gridStyle = colsCount === 1
+      ? 'grid-template-columns: 1fr;'
+      : `grid-template-columns: repeat(${colsCount}, minmax(0, 1fr));`;
+
+    let gridHTML = `<div class="tracker-dashboard-grid ${collapsedClass}" style="${gridStyle} margin-bottom: 12px;">`;
+    habitList.forEach((h, idx) => {
+      const showRedBorder = isPinnedSection || pinnedRegistry.includes(h.id);
+      gridHTML += renderSingleHabitCard(h, showRedBorder, idx);
+    });
+    gridHTML += `</div>`;
+    return gridHTML;
+  };
+
   let html = "";
 
-  // 1. CONDITIONAL SECTION: PINNED TRACKERS (Pinned Tracker Tasks)
+  // 1. CONDITIONAL SECTION: PINNED TRACKERS
   const sortedPinned = sortHabitsGroup(pinnedHabits);
-
   if (sortedPinned.length > 0) {
     const pinnedCollapsed = trackerLabelLineCollapsedState.pinned !== undefined ? trackerLabelLineCollapsedState.pinned : true;
     const pinnedArrow = pinnedCollapsed ? '▶' : '▼';
@@ -2057,18 +2081,16 @@ function renderHabitsDashboard() {
         <span>📌 PINNED TRACKERS <span style="font-size: 9px; margin-left: 2px;">${pinnedArrow}</span></span>
         <span>(${sortedPinned.length})</span>
       </div>
-      <div class="tracker-dashboard-grid ${pinnedCollapsed ? 'collapsed' : ''}" style="margin-bottom: 12px;">
     `;
-    sortedPinned.forEach(h => { html += renderSingleHabitCard(h, true); });
-    html += `</div>`;
+    html += renderTrackerCardsGrid(sortedPinned, true, pinnedCollapsed);
   }
 
   // 2. TRACKER LABEL LINE SECTIONS
   const allTrackerLabels = Array.from(getUniqueTrackerLabels());
   const pinnedLabelRegistry = Array.isArray(pinnedTrackerLabelsRegistry) ? pinnedTrackerLabelsRegistry : [];
 
-  const pinnedLabels = allTrackerLabels.filter(l => pinnedLabelRegistry.includes(l)).sort((a,b) => a.localeCompare(b));
-  const unpinnedLabels = allTrackerLabels.filter(l => !pinnedLabelRegistry.includes(l)).sort((a,b) => a.localeCompare(b));
+  const pinnedLabels = allTrackerLabels.filter(l => pinnedLabelRegistry.includes(l)).sort((a, b) => a.localeCompare(b));
+  const unpinnedLabels = allTrackerLabels.filter(l => !pinnedLabelRegistry.includes(l)).sort((a, b) => a.localeCompare(b));
   const noLabelHabits = regularHabits.filter(h => !h.labels || h.labels.length === 0);
 
   const renderSingleTrackerLabelSection = (labelName, isPinnedLabel, isNoLabel = false) => {
@@ -2079,12 +2101,9 @@ function renderHabitsDashboard() {
     const isCollapsed = trackerLabelLineCollapsedState[labelKey];
     const arrow = isCollapsed ? '▶' : '▼';
 
-    let matchingHabits = [];
-    if (isNoLabel) {
-      matchingHabits = sortHabitsGroup(noLabelHabits);
-    } else {
-      matchingHabits = sortHabitsGroup(regularHabits.filter(h => h.labels && h.labels.includes(labelName)));
-    }
+    let matchingHabits = isNoLabel
+      ? sortHabitsGroup(noLabelHabits)
+      : sortHabitsGroup(regularHabits.filter(h => h.labels && h.labels.includes(labelName)));
 
     const base64 = btoa(encodeURIComponent(labelName)).replace(/=/g, '');
     const secClass = isPinnedLabel ? 'label-pinned-section-title' : 'macro-section-title';
@@ -2120,9 +2139,7 @@ function renderHabitsDashboard() {
     `;
 
     if (matchingHabits.length > 0) {
-      html += `<div class="tracker-dashboard-grid ${isCollapsed ? 'collapsed' : ''}" style="margin-bottom: 12px;">`;
-      matchingHabits.forEach(h => { html += renderSingleHabitCard(h, pinnedRegistry.includes(h.id)); });
-      html += `</div>`;
+      html += renderTrackerCardsGrid(matchingHabits, false, isCollapsed);
     } else {
       html += `<div class="tracker-dashboard-grid ${isCollapsed ? 'collapsed' : ''}" style="font-size:12px; color:#80868b; font-style:italic; padding:4px 0 12px 12px;">No tasks</div>`;
     }
